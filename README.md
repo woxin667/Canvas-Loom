@@ -1,14 +1,19 @@
-# Obsidian Canvas 卡片拆分插件
+# Canvas Card Actions
 
-![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=%23483699&label=downloads&query=%24%5B%22cardify%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json)
-
-本插件允许您根据用户自定义的分隔符，将 Obsidian Canvas 中的单个文本卡片拆分为多个卡片。
+本插件为 Obsidian Canvas 添加了拆分卡片和复制卡片内容的功能。您可以根据自定义的分隔符将文本卡片拆分成多个卡片，也可以复制单个或多个卡片的内容到剪贴板。
 
 ## 如何使用
 
-1.  在 Canvas 视图中，右键点击一个文本卡片。
-2.  从上下文菜单中选择“按分隔符拆分卡片”。
-3.  插件将根据您在设置中指定的分隔符来拆分卡片内容，并在原始卡片的右侧创建新的卡片。
+### 拆分卡片功能
+
+1. 在 Canvas 视图中，右键点击一个文本卡片。
+2. 从上下文菜单中选择"按分隔符拆分卡片"。
+3. 插件将根据您在设置中指定的分隔符来拆分卡片内容，并在原始卡片的右侧创建新的卡片。
+
+### 复制卡片内容功能
+
+- **复制单个卡片**：右键点击一个文本卡片，选择"复制卡片文本"即可将卡片内容复制到剪贴板。
+- **复制多个卡片**：选中多个卡片，在任意选中卡片上右键选择"复制已排序的卡片内容"，插件会按从上到下、从左到右的顺序复制卡片内容。
 
 ## 设置
 
@@ -16,6 +21,6 @@
 
 ## 致谢
 
-本插件是基于 **joshuakto** 的原创插件 [obsidian-cardify](https://github.com/joshuakto/obsidian-cardify) 重构和精简后的版本。所有原创想法和基础工作均归功于他。
+本插件是基于 **joshuakto** 的原创插件 [obsidian-cardify](https://github.com/joshuakto/obsidian-cardify) 重构和扩展后的版本。所有基础工作均归功于他。
 
-此版本移除了原插件中基于文件的卡片生成功能，专注于改善 Obsidian Canvas 内部的工作流程。
+此版本在原插件基础上进行了重构，移除了基于文件的卡片生成功能，同时扩展了 Obsidian Canvas 的功能，增加了卡片拆分和内容复制功能。
