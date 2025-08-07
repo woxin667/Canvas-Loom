@@ -1,6 +1,6 @@
 {
-	"id": "obsidian-canvas-card-splitting",
-	"name": "画布卡片拆分",
+	"id": "obsidian-canvas-card-actions",
+	"name": "Canvas功能增强",
 	"version": "1.0.0",
 	"minAppVersion": "1.0.0",
 	"description": "将Obsidian画布中的文本卡片拆分为多张卡片。",

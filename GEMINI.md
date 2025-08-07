@@ -1,4 +1,4 @@
-# Obsidian 画布卡片拆分 插件
+# Obsidian Canvas功能增强 插件
 
 ## 项目概览
 
