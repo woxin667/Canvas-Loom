@@ -36,5 +36,21 @@ export default class CardifySettingTab extends PluginSettingTab {
 					this.plugin.settings.sortPriority = value;
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('启用徽章功能')
+			.setDesc('是否在Canvas卡片上显示徽章')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableBadges)
+				.onChange(async (value) => {
+					this.plugin.settings.enableBadges = value;
+					await this.plugin.saveSettings();
+					
+					// 如果启用了徽章功能，初始化所有徽章显示
+					if (value) {
+						// @ts-ignore
+						this.plugin.initializeAllCanvasBadges();
+					}
+				}));
 	}
 }

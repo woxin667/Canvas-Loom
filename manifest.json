@@ -6,5 +6,6 @@
 	"description": "为Obsidian Canvas添加了拆分卡片和复制卡片内容的功能。",
 	"author": "woxin667",
 	"authorUrl": "",
-	"isDesktopOnly": false
+	"isDesktopOnly": false,
+	"styles": "styles.css"
 }
