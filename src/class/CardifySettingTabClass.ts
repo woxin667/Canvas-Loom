@@ -24,5 +24,17 @@ export default class CardifySettingTab extends PluginSettingTab {
 					this.plugin.settings.canvasCardDelimiter = value;
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('设置卡片排序优先级')
+			.setDesc('选择在复制多张卡片时的排序优先级')
+			.addDropdown(dropdown => dropdown
+				.addOption('yx', '优先按垂直方向排序（从上到下，然后从左到右）')
+				.addOption('xy', '优先按水平方向排序（从左到右，然后从上到下）')
+				.setValue(this.plugin.settings.sortPriority)
+				.onChange(async (value: 'yx' | 'xy') => {
+					this.plugin.settings.sortPriority = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }

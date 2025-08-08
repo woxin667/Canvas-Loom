@@ -5,6 +5,7 @@ import { copyTextToClipboard } from "./utils/clipboardUtils";
 
 const DEFAULT_SETTINGS: CardifySettings = {
 	canvasCardDelimiter: '---',
+	sortPriority: 'yx', // 默认优先按y坐标排序
 }
 export default class Cardify extends Plugin {
 	settings: CardifySettings;
@@ -30,12 +31,21 @@ export default class Cardify extends Plugin {
 							y: node.y
 						}));
 
-					// 从上到下，从左到右排序
+					// 根据设置的优先级进行排序
 					cardData.sort((a, b) => {
-						if (a.y !== b.y) {
+						if (this.settings.sortPriority === 'yx') {
+							// 优先按y坐标排序（从上到下，然后从左到右）
+							if (a.y !== b.y) {
+								return a.y - b.y;
+							}
+							return a.x - b.x;
+						} else {
+							// 优先按x坐标排序（从左到右，然后从上到下）
+							if (a.x !== b.x) {
+								return a.x - b.x;
+							}
 							return a.y - b.y;
 						}
-						return a.x - b.x;
 					});
 
 					const combinedText = cardData.map(card => card.text).join('\n\n');
