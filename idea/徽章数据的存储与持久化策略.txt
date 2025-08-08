@@ -1,0 +1,662 @@
+## Canvas 文件的本质
+
+首先，让我们理解 Obsidian Canvas 文件的本质。当你在 Obsidian 中创建一个 Canvas 时，它实际上会生成一个 `.canvas` 文件。这个文件本质上是一个 JSON 文件，存储了 Canvas 中所有节点和连接的完整信息。让我通过一个例子来说明：
+
+```json
+{
+  "nodes": [
+    {
+      "id": "abc123",
+      "type": "text",
+      "text": "这是一个文本卡片",
+      "x": 100,
+      "y": 200,
+      "width": 250,
+      "height": 150,
+      "color": "red"
+    },
+    {
+      "id": "def456",
+      "type": "file",
+      "file": "notes/my-note.md",
+      "x": 400,
+      "y": 200,
+      "width": 300,
+      "height": 200
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge1",
+      "fromNode": "abc123",
+      "toNode": "def456",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ]
+}
+```
+
+这个 JSON 结构是 Obsidian 官方定义的格式，用于保存 Canvas 的所有数据。每当你移动一个卡片、改变它的大小、添加新的卡片或连接线时，Obsidian 都会更新这个 JSON 文件。
+
+## 利用关键特性
+
+**Obsidian 在保存和加载 Canvas 文件时，会保留它不认识的字段**。这意味着如果我们在节点数据中添加自定义字段（如 `badge: "99"` 或 `cssclass: "important"`），Obsidian 不会删除这些字段，它们会被原样保存在文件中。
+
+这种方案的优势在于：
+1. **完全持久化**：数据直接保存在 `.canvas` 文件中，不会因为重启 Obsidian 或重新打开文件而丢失
+2. **可移植性**：如果你把 `.canvas` 文件分享给别人，只要他们也安装了你的插件，就能看到同样的徽章
+3. **与 Obsidian 的存储机制完美契合**：不需要创建额外的文件或使用其他存储机制
+4. **版本控制友好**：因为数据在文件中，可以被 Git 等版本控制系统追踪
+
+## 实现原理深度解析
+
+让我详细解释这个方案是如何工作的。整个流程可以分为三个核心步骤：
+
+### 步骤 1：获取和解析 Canvas 数据
+
+当用户想要添加徽章时，我们首先需要获取当前 Canvas 的完整数据。Canvas 对象提供了获取这些数据的方法：
+
+```typescript
+// 获取 Canvas 的完整数据
+const canvasData = canvas.getData();
+// 这会返回类似这样的对象：
+// {
+//   nodes: [...],
+//   edges: [...]
+// }
+```
+
+### 步骤 2：修改数据并添加自定义字段
+
+接下来，我们需要找到要添加徽章的特定节点，并为它添加自定义字段：
+
+```typescript
+// 找到目标节点
+const nodeData = canvasData.nodes.find(n => n.id === targetNode.id);
+if (nodeData) {
+    // 添加我们的自定义字段
+    nodeData.badge = "99";
+    nodeData.badgeType = "number";
+}
+```
+
+### 步骤 3：保存修改后的数据
+
+最后，我们需要将修改后的数据保存回 `.canvas` 文件：
+
+```typescript
+// 将修改后的数据保存回 Canvas
+await canvas.setData(canvasData);
+await canvas.requestSave();
+```
+
+## 读取和恢复流程
+
+当 Canvas 被打开或重新加载时，我们需要读取这些自定义字段并将它们应用到 DOM 元素上：
+
+```typescript
+// Canvas 加载完成后
+canvas.on('node-added', (node) => {
+    // 获取节点的原始数据
+    const nodeData = canvas.getData().nodes.find(n => n.id === node.id);
+    
+    if (nodeData && nodeData.badge) {
+        // 将徽章应用到 DOM 元素
+        node.nodeEl.setAttribute('data-badge', nodeData.badge);
+        node.nodeEl.setAttribute('data-badge-type', nodeData.badgeType);
+    }
+});
+```
+
+## 为你的徽章功能实现完整方案
+
+现在，让我为你提供一个完整的实现方案，将这个持久化机制整合到你的徽章功能中：
+
+```
+import { Plugin, Modal, Notice, TFile } from 'obsidian';
+
+// Canvas 数据的类型定义
+interface CanvasData {
+    nodes: CanvasNodeData[];
+    edges: CanvasEdgeData[];
+}
+
+interface CanvasNodeData {
+    id: string;
+    type: string;
+    text?: string;
+    file?: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color?: string;
+    // 我们的自定义字段
+    badge?: string;
+    badgeType?: 'number' | 'text' | 'emoji';
+}
+
+interface CanvasEdgeData {
+    id: string;
+    fromNode: string;
+    toNode: string;
+    fromSide: string;
+    toSide: string;
+}
+
+// BadgeModal 类 - 处理徽章输入界面
+class BadgeModal extends Modal {
+    plugin: Cardify;
+    node: any;
+    currentBadge: string;
+
+    constructor(plugin: Cardify, node: any, currentBadge: string) {
+        super(plugin.app);
+        this.plugin = plugin;
+        this.node = node;
+        this.currentBadge = currentBadge || "";
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        
+        contentEl.createEl("h2", { text: "设置卡片徽章" });
+        
+        const inputContainer = contentEl.createDiv();
+        inputContainer.createEl("label", { text: "徽章内容（数字、文字或emoji）：" });
+        
+        const input = inputContainer.createEl("input", {
+            type: "text",
+            value: this.currentBadge,
+            placeholder: "例如: 1, Done, ✅"
+        });
+        input.style.width = "100%";
+        input.style.marginTop = "10px";
+        
+        const hint = contentEl.createDiv();
+        hint.style.fontSize = "0.9em";
+        hint.style.color = "var(--text-muted)";
+        hint.style.marginTop = "10px";
+        hint.setText("提示：徽章会自动保存在 Canvas 文件中");
+        
+        const buttonContainer = contentEl.createDiv();
+        buttonContainer.style.marginTop = "20px";
+        buttonContainer.style.display = "flex";
+        buttonContainer.style.justifyContent = "flex-end";
+        buttonContainer.style.gap = "10px";
+        
+        const removeButton = buttonContainer.createEl("button", { text: "移除徽章" });
+        removeButton.addEventListener("click", async () => {
+            await this.setBadge("");
+            this.close();
+        });
+        
+        const cancelButton = buttonContainer.createEl("button", { text: "取消" });
+        cancelButton.addEventListener("click", () => {
+            this.close();
+        });
+        
+        const confirmButton = buttonContainer.createEl("button", { text: "确定" });
+        confirmButton.addClass("mod-cta");
+        confirmButton.addEventListener("click", async () => {
+            await this.setBadge(input.value.trim());
+            this.close();
+        });
+        
+        input.addEventListener("keypress", async (e) => {
+            if (e.key === "Enter") {
+                await this.setBadge(input.value.trim());
+                this.close();
+            }
+        });
+        
+        input.focus();
+        input.select();
+    }
+
+    async setBadge(badgeText: string) {
+        try {
+            // 第一步：更新 DOM（立即显示效果）
+            this.updateNodeDOM(this.node, badgeText);
+            
+            // 第二步：持久化到 Canvas 文件
+            await this.plugin.persistBadgeToCanvas(this.node, badgeText);
+            
+            if (badgeText) {
+                new Notice(`徽章已设置: ${badgeText}`);
+            } else {
+                new Notice("徽章已移除");
+            }
+        } catch (error) {
+            console.error("设置徽章时出错:", error);
+            new Notice("设置徽章失败，请查看控制台了解详情");
+        }
+    }
+
+    updateNodeDOM(node: any, badgeText: string) {
+        // 在多个可能的元素上设置属性
+        const elementsToUpdate = [
+            node.nodeEl?.querySelector('.canvas-node-content'),
+            node.nodeEl?.querySelector('.canvas-node-container'),
+            node.nodeEl
+        ].filter(Boolean);
+        
+        elementsToUpdate.forEach(element => {
+            if (badgeText) {
+                element.setAttribute("data-badge", badgeText);
+                
+                // 判断徽章类型
+                const badgeType = this.determineBadgeType(badgeText);
+                element.setAttribute("data-badge-type", badgeType);
+            } else {
+                element.removeAttribute("data-badge");
+                element.removeAttribute("data-badge-type");
+            }
+        });
+    }
+
+    determineBadgeType(text: string): 'number' | 'text' | 'emoji' {
+        if (/^\d+$/.test(text)) {
+            return 'number';
+        } else if (this.isEmoji(text)) {
+            return 'emoji';
+        } else {
+            return 'text';
+        }
+    }
+
+    isEmoji(str: string): boolean {
+        const emojiRegex = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2000}-\u{206F}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}\u{3000}-\u{303F}]+$/u;
+        return emojiRegex.test(str);
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+}
+
+// 主插件类
+export default class Cardify extends Plugin {
+    settings: any = {
+        enableBadges: true
+    };
+    
+    private styleEl: HTMLStyleElement | null = null;
+
+    async onload() {
+        console.log("Loading Canvas Card Actions plugin with persistence");
+        
+        // 注入样式
+        this.injectStyles();
+        
+        // 注册右键菜单
+        this.registerCanvasMenus();
+        
+        // 监听 Canvas 事件
+        this.registerCanvasEvents();
+        
+        // 初始化时加载所有徽章
+        this.app.workspace.onLayoutReady(() => {
+            this.loadAllCanvasBadges();
+        });
+    }
+    
+    registerCanvasMenus() {
+        // 单个节点的右键菜单
+        this.registerEvent(
+            this.app.workspace.on("canvas:node-menu", (menu: any, node: any) => {
+                this.addBadgeCommand(menu, node);
+            })
+        );
+        
+        // 选中多个节点时的右键菜单
+        this.registerEvent(
+            this.app.workspace.on("canvas:selection-menu", (menu: any, selection: any) => {
+                if (selection.size === 1) {
+                    const node = Array.from(selection)[0];
+                    this.addBadgeCommand(menu, node);
+                }
+            })
+        );
+    }
+    
+    registerCanvasEvents() {
+        // 监听 Canvas 文件打开事件
+        this.registerEvent(
+            this.app.workspace.on("file-open", (file: TFile) => {
+                if (file && file.extension === "canvas") {
+                    // 延迟一下，确保 Canvas 完全加载
+                    setTimeout(() => {
+                        this.loadCanvasBadges(file);
+                    }, 100);
+                }
+            })
+        );
+        
+        // 监听布局变化，确保样式持续存在
+        this.registerEvent(
+            this.app.workspace.on("layout-change", () => {
+                this.ensureStylesExist();
+            })
+        );
+    }
+    
+    addBadgeCommand(menu: any, node: any) {
+        // 检查是否是可以添加徽章的节点
+        const isTextCard = node.text !== undefined;
+        const isMarkdownEmbed = node.nodeEl?.querySelector('.markdown-embed') !== null;
+        
+        if (isTextCard || isMarkdownEmbed) {
+            menu.addItem((item: any) => {
+                item
+                    .setTitle("添加/编辑徽章")
+                    .setIcon("tag")
+                    .onClick(async () => {
+                        const currentBadge = await this.getCurrentBadge(node);
+                        new BadgeModal(this, node, currentBadge).open();
+                    });
+            });
+        }
+    }
+    
+    async getCurrentBadge(node: any): Promise<string> {
+        // 首先尝试从 Canvas 数据中获取
+        try {
+            const canvas = node.canvas;
+            if (canvas && canvas.getData) {
+                const canvasData = canvas.getData();
+                const nodeData = canvasData.nodes.find((n: CanvasNodeData) => n.id === node.id);
+                if (nodeData && nodeData.badge) {
+                    return nodeData.badge;
+                }
+            }
+        } catch (error) {
+            console.log("从 Canvas 数据获取徽章失败，尝试从 DOM 获取");
+        }
+        
+        // 降级方案：从 DOM 获取
+        const possibleElements = [
+            node.nodeEl?.querySelector('.canvas-node-content'),
+            node.nodeEl?.querySelector('.canvas-node-container'),
+            node.nodeEl
+        ].filter(Boolean);
+        
+        for (const element of possibleElements) {
+            const badge = element.getAttribute("data-badge");
+            if (badge) {
+                return badge;
+            }
+        }
+        
+        return "";
+    }
+    
+    async persistBadgeToCanvas(node: any, badgeText: string) {
+        const canvas = node.canvas;
+        if (!canvas || !canvas.getData || !canvas.setData) {
+            console.error("无法访问 Canvas 数据");
+            throw new Error("无法访问 Canvas 数据");
+        }
+        
+        // 获取当前 Canvas 的完整数据
+        const canvasData = canvas.getData();
+        
+        // 找到对应的节点数据
+        const nodeData = canvasData.nodes.find((n: CanvasNodeData) => n.id === node.id);
+        if (!nodeData) {
+            console.error("在 Canvas 数据中找不到节点");
+            throw new Error("在 Canvas 数据中找不到节点");
+        }
+        
+        // 更新节点数据
+        if (badgeText) {
+            nodeData.badge = badgeText;
+            nodeData.badgeType = this.determineBadgeType(badgeText);
+        } else {
+            // 移除徽章
+            delete nodeData.badge;
+            delete nodeData.badgeType;
+        }
+        
+        // 保存修改后的数据回 Canvas
+        await canvas.setData(canvasData);
+        
+        // 请求保存文件
+        await canvas.requestSave();
+        
+        console.log(`徽章已持久化: ${badgeText || '(已移除)'}`);
+    }
+    
+    determineBadgeType(text: string): 'number' | 'text' | 'emoji' {
+        if (/^\d+$/.test(text)) {
+            return 'number';
+        } else if (this.isEmoji(text)) {
+            return 'emoji';
+        } else {
+            return 'text';
+        }
+    }
+    
+    isEmoji(str: string): boolean {
+        const emojiRegex = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]+$/u;
+        return emojiRegex.test(str);
+    }
+    
+    async loadCanvasBadges(file: TFile) {
+        const leaves = this.app.workspace.getLeavesOfType("canvas");
+        
+        for (const leaf of leaves) {
+            const view = leaf.view as any;
+            if (view.file?.path === file.path) {
+                const canvas = view.canvas;
+                if (!canvas) continue;
+                
+                try {
+                    const canvasData = canvas.getData();
+                    
+                    // 遍历所有节点
+                    canvasData.nodes.forEach((nodeData: CanvasNodeData) => {
+                        if (nodeData.badge) {
+                            // 找到对应的 DOM 节点
+                            const node = canvas.nodes?.get(nodeData.id);
+                            if (node) {
+                                this.applyBadgeToNode(node, nodeData.badge, nodeData.badgeType);
+                            }
+                        }
+                    });
+                    
+                    console.log(`已加载 ${file.name} 的所有徽章`);
+                } catch (error) {
+                    console.error("加载 Canvas 徽章时出错:", error);
+                }
+            }
+        }
+    }
+    
+    loadAllCanvasBadges() {
+        // 加载所有打开的 Canvas 的徽章
+        const canvasLeaves = this.app.workspace.getLeavesOfType("canvas");
+        
+        canvasLeaves.forEach((leaf) => {
+            const view = leaf.view as any;
+            if (view.file) {
+                this.loadCanvasBadges(view.file);
+            }
+        });
+    }
+    
+    applyBadgeToNode(node: any, badgeText: string, badgeType?: string) {
+        // 应用徽章到节点的 DOM 元素
+        const elementsToUpdate = [
+            node.nodeEl?.querySelector('.canvas-node-content'),
+            node.nodeEl?.querySelector('.canvas-node-container'),
+            node.nodeEl
+        ].filter(Boolean);
+        
+        elementsToUpdate.forEach(element => {
+            element.setAttribute("data-badge", badgeText);
+            if (badgeType) {
+                element.setAttribute("data-badge-type", badgeType);
+            } else {
+                // 如果没有指定类型，自动判断
+                const type = this.determineBadgeType(badgeText);
+                element.setAttribute("data-badge-type", type);
+            }
+        });
+    }
+    
+    ensureStylesExist() {
+        if (!document.querySelector('#canvas-badge-styles')) {
+            this.injectStyles();
+        }
+    }
+    
+    injectStyles() {
+        // 如果已存在，先移除
+        if (this.styleEl && this.styleEl.parentNode) {
+            this.styleEl.remove();
+        }
+        
+        this.styleEl = document.createElement("style");
+        this.styleEl.id = "canvas-badge-styles";
+        
+        // 使用高优先级的 CSS 规则
+        this.styleEl.textContent = `
+            /* 确保 Canvas 节点内容有相对定位 */
+            .canvas-node .canvas-node-content {
+                position: relative !important;
+            }
+            
+            /* 主要徽章样式 */
+            .canvas-node .canvas-node-content[data-badge]::after,
+            .canvas-node-content[data-badge]::after,
+            .markdown-embed[data-badge]::after {
+                content: attr(data-badge) !important;
+                position: absolute !important;
+                top: -10px !important;
+                right: -10px !important;
+                min-width: 24px !important;
+                height: 24px !important;
+                padding: 3px 7px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                font-size: 12px !important;
+                font-weight: bold !important;
+                color: white !important;
+                background-color: #5865F2 !important;
+                border-radius: 12px !important;
+                z-index: 1000 !important;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+                white-space: nowrap !important;
+                pointer-events: none !important;
+                line-height: 1 !important;
+                font-family: var(--font-interface) !important;
+                border: 2px solid var(--background-primary) !important;
+                animation: badge-appear 0.2s ease-out !important;
+            }
+            
+            /* 数字徽章 - 完美圆形 */
+            .canvas-node-content[data-badge-type="number"]::after {
+                background-color: #5865F2 !important;
+                border-radius: 50% !important;
+                padding: 0 !important;
+                min-width: 26px !important;
+                height: 26px !important;
+            }
+            
+            /* 文字徽章 - 药丸形状 */
+            .canvas-node-content[data-badge-type="text"]::after {
+                background-color: #6c757d !important;
+                border-radius: 13px !important;
+                padding: 3px 10px !important;
+                min-width: auto !important;
+            }
+            
+            /* Emoji 徽章 - 无背景 */
+            .canvas-node-content[data-badge-type="emoji"]::after {
+                background-color: transparent !important;
+                box-shadow: none !important;
+                border: none !important;
+                font-size: 20px !important;
+                min-width: auto !important;
+                height: auto !important;
+                padding: 0 !important;
+            }
+            
+            /* 动画效果 */
+            @keyframes badge-appear {
+                from {
+                    transform: scale(0);
+                    opacity: 0;
+                }
+                to {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+            
+            /* 确保徽章在节点被选中时仍然可见 */
+            .canvas-node.is-selected .canvas-node-content[data-badge]::after {
+                z-index: 1001 !important;
+            }
+            
+            /* 暗色主题优化 */
+            .theme-dark .canvas-node-content[data-badge]::after {
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+            }
+        `;
+        
+        document.head.appendChild(this.styleEl);
+        console.log("Canvas badge styles injected with persistence support");
+    }
+    
+    onunload() {
+        if (this.styleEl && this.styleEl.parentNode) {
+            this.styleEl.remove();
+        }
+        console.log("Canvas Card Actions plugin unloaded");
+    }
+}
+```
+
+## 完整的技术架构理解
+
+现在我来帮你深入理解这个持久化方案的整体架构。这个解决方案结合了三个关键技术概念，让我逐一为你解释。
+
+### Canvas 文件作为数据存储层
+
+想象一下 Canvas 文件就像一个数据库。当你在 Obsidian 中打开一个 `.canvas` 文件时，实际上是在查看一个 JSON 格式的结构化数据。这个文件包含了 Canvas 中所有视觉元素的完整信息，包括位置、大小、内容和连接关系。
+
+最关键的是，Obsidian 在设计时采用了一个非常开放的策略：它会保留所有它不认识的字段。这就像是一个宽容的数据库，允许你添加自定义列而不会报错或删除它们。这个特性为插件开发者提供了巨大的灵活性。
+
+### 数据流的双向同步机制
+
+整个系统的数据流可以理解为一个双向同步的过程。当用户添加徽章时，数据会经历这样的流程：用户交互触发修改，然后同时更新两个地方——DOM（用于即时显示）和 Canvas 文件（用于持久存储）。当 Canvas 重新加载时，流程则反过来：从文件读取数据，然后应用到 DOM 上。
+
+这种双向同步确保了数据的一致性和持久性。即使 Obsidian 重启，或者文件被分享给其他人，徽章信息都能被正确恢复。
+
+### 事件驱动的生命周期管理
+
+插件通过监听多个关键事件来管理徽章的生命周期。当 Canvas 文件被打开时，插件会自动读取并应用所有徽章。当用户修改徽章时，插件会立即更新显示并保存到文件。这种事件驱动的方式确保了用户体验的流畅性。
+
+## 关键实现细节的深入解析
+
+让我为你解释代码中几个特别重要的实现细节，这些细节决定了整个功能能否正常工作。
+
+### Canvas 数据的获取和修改
+
+当我们调用 `canvas.getData()` 时，实际上是获取了 Canvas 当前状态的一个完整快照。这个快照包含了所有节点和连接的信息。修改这个数据对象后，通过 `canvas.setData()` 将其写回，就完成了数据的更新。这个过程类似于数据库中的事务操作——读取、修改、提交。
+
+重要的是要理解，`canvas.requestSave()` 这一步是必不可少的。它告诉 Obsidian 需要将内存中的更改写入到磁盘文件中。如果忘记这一步，你的更改只会存在于内存中，重启后就会丢失。
+
+### 节点身份的识别机制
+
+每个 Canvas 节点都有一个唯一的 ID，这个 ID 是由 Obsidian 自动生成的。当我们需要找到特定节点的数据时，就是通过这个 ID 进行匹配。这就像数据库中的主键，确保我们总是能准确地找到要操作的数据。
+
+### 样式注入的时机控制
+
+样式的注入时机非常关键。我们不能太早（Canvas 还没加载），也不能太晚（用户已经看到了没有徽章的界面）。通过在多个事件点检查和重新注入样式，我们确保了徽章始终能正确显示。
