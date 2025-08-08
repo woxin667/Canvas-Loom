@@ -48,8 +48,7 @@ export default class CardifySettingTab extends PluginSettingTab {
 					
 					// 如果启用了徽章功能，初始化所有徽章显示
 					if (value) {
-						// @ts-ignore
-						this.plugin.initializeAllCanvasBadges();
+						this.plugin.loadAllCanvasBadges();
 					}
 				}));
 	}

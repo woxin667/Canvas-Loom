@@ -1,584 +1,518 @@
-import {Notice, Plugin, Modal, Setting} from 'obsidian';
-import CardifySettingTab from "./class/CardifySettingTabClass";
+import {Plugin, Modal, Notice, TFile} from 'obsidian';
 import CardifySettings from "./interface/ICardifySettings";
-import { copyTextToClipboard } from "./utils/clipboardUtils";
-
-// 徽章输入模态框
-class BadgeModal extends Modal {
-	private node: any;
-	private plugin: Cardify;
-	private badgeInput: HTMLInputElement;
-	private currentBadge: string;
-
-	constructor(plugin: Cardify, node: any, currentBadge: string) {
-		super(plugin.app);
-		this.plugin = plugin;
-		this.node = node;
-		this.currentBadge = currentBadge;
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.empty();
-		contentEl.createEl("h2", {text: this.currentBadge ? "编辑徽章" : "添加徽章"});
-
-		new Setting(contentEl)
-			.setName("徽章内容")
-			.setDesc("输入要显示在卡片上的徽章内容（数字、文字或emoji）")
-			.addText(text => {
-				text.setPlaceholder("例如: 1, Done, ✅")
-					.setValue(this.currentBadge || "")
-					.onChange(value => {
-						this.currentBadge = value;
-					});
-				this.badgeInput = text.inputEl;
-			});
-
-		new Setting(contentEl)
-			.addButton(button => button
-				.setButtonText("确定")
-				.setCta()
-				.onClick(() => {
-					this.setBadge(this.currentBadge);
-					this.close();
-				}))
-			.addButton(button => button
-				.setButtonText("移除徽章")
-				.onClick(() => {
-					this.setBadge("");
-					this.close();
-				}))
-			.addButton(button => button
-				.setButtonText("取消")
-				.onClick(() => {
-					this.close();
-				}));
-
-		// 聚焦到输入框
-		this.badgeInput.focus();
-	}
-
-	async setBadge(badgeText: string) {
-		// 我们需要在多个元素上设置属性，以确保兼容性
-		const elementsToUpdate = [
-			this.node.nodeEl?.querySelector('.canvas-node-content'),
-			this.node.nodeEl?.querySelector('.canvas-node-container'),
-			this.node.nodeEl
-		].filter(Boolean);
-		
-		if (elementsToUpdate.length === 0) {
-			console.error("无法找到合适的元素来设置徽章");
-			new Notice("设置徽章失败：无法找到卡片元素");
-			return;
-		}
-		
-		try {
-			elementsToUpdate.forEach(element => {
-				if (badgeText) {
-					// 设置徽章属性
-					element.setAttribute("data-badge", badgeText);
-					
-					// 判断徽章类型
-					if (/^\d+$/.test(badgeText)) {
-						element.setAttribute("data-badge-type", "number");
-					} else if (/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(badgeText)) {
-						element.setAttribute("data-badge-type", "emoji");
-					} else {
-						element.setAttribute("data-badge-type", "text");
-					}
-				} else {
-					// 移除徽章
-					element.removeAttribute("data-badge");
-					element.removeAttribute("data-badge-type");
-				}
-			});
-			
-			// 通知用户
-			if (badgeText) {
-				new Notice(`徽章已设置为: ${badgeText}`);
-			} else {
-				new Notice("徽章已移除");
-			}
-			
-			// 重新注入样式以确保生效
-			this.plugin.reinjectStyles();
-		} catch (error) {
-			console.error("设置徽章时出错:", error);
-			new Notice("设置徽章时出错，请查看控制台了解详情");
-		}
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
 
 const DEFAULT_SETTINGS: CardifySettings = {
 	canvasCardDelimiter: '---',
-	sortPriority: 'yx', // 默认优先按y坐标排序
-	enableBadges: true, // 默认启用徽章功能
+	sortPriority: 'yx',
+	enableBadges: true,
 }
+
+// Canvas 数据的类型定义
+interface CanvasData {
+    nodes: CanvasNodeData[];
+    edges: CanvasEdgeData[];
+}
+
+interface CanvasNodeData {
+    id: string;
+    type: string;
+    text?: string;
+    file?: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color?: string;
+    // 我们的自定义字段
+    badge?: string;
+    badgeType?: 'number' | 'text' | 'emoji';
+}
+
+interface CanvasEdgeData {
+    id: string;
+    fromNode: string;
+    toNode: string;
+    fromSide: string;
+    toSide: string;
+}
+
+// BadgeModal 类 - 处理徽章输入界面
+class BadgeModal extends Modal {
+    plugin: Cardify;
+    node: any;
+    currentBadge: string;
+
+    constructor(plugin: Cardify, node: any, currentBadge: string) {
+        super(plugin.app);
+        this.plugin = plugin;
+        this.node = node;
+        this.currentBadge = currentBadge || "";
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        
+        contentEl.createEl("h2", { text: "设置卡片徽章" });
+        
+        const inputContainer = contentEl.createDiv();
+        inputContainer.createEl("label", { text: "徽章内容（数字、文字或emoji）：" });
+        
+        const input = inputContainer.createEl("input", {
+            type: "text",
+            value: this.currentBadge,
+            placeholder: "例如: 1, Done, ✅"
+        });
+        input.style.width = "100%";
+        input.style.marginTop = "10px";
+        
+        const hint = contentEl.createDiv();
+        hint.style.fontSize = "0.9em";
+        hint.style.color = "var(--text-muted)";
+        hint.style.marginTop = "10px";
+        hint.setText("提示：徽章会自动保存在 Canvas 文件中");
+        
+        const buttonContainer = contentEl.createDiv();
+        buttonContainer.style.marginTop = "20px";
+        buttonContainer.style.display = "flex";
+        buttonContainer.style.justifyContent = "flex-end";
+        buttonContainer.style.gap = "10px";
+        
+        const removeButton = buttonContainer.createEl("button", { text: "移除徽章" });
+        removeButton.addEventListener("click", async () => {
+            await this.setBadge("");
+            this.close();
+        });
+        
+        const cancelButton = buttonContainer.createEl("button", { text: "取消" });
+        cancelButton.addEventListener("click", () => {
+            this.close();
+        });
+        
+        const confirmButton = buttonContainer.createEl("button", { text: "确定" });
+        confirmButton.addClass("mod-cta");
+        confirmButton.addEventListener("click", async () => {
+            await this.setBadge(input.value.trim());
+            this.close();
+        });
+        
+        input.addEventListener("keypress", async (e) => {
+            if (e.key === "Enter") {
+                await this.setBadge(input.value.trim());
+                this.close();
+            }
+        });
+        
+        input.focus();
+        input.select();
+    }
+
+    async setBadge(badgeText: string) {
+        try {
+            // 第一步：更新 DOM（立即显示效果）
+            this.updateNodeDOM(this.node, badgeText);
+            
+            // 第二步：持久化到 Canvas 文件
+            await this.plugin.persistBadgeToCanvas(this.node, badgeText);
+            
+            if (badgeText) {
+                new Notice(`徽章已设置: ${badgeText}`);
+            } else {
+                new Notice("徽章已移除");
+            }
+        } catch (error) {
+            console.error("设置徽章时出错:", error);
+            new Notice("设置徽章失败，请查看控制台了解详情");
+        }
+    }
+
+    updateNodeDOM(node: any, badgeText: string) {
+        // 在多个可能的元素上设置属性
+        const elementsToUpdate = [
+            node.nodeEl?.querySelector('.canvas-node-content'),
+            node.nodeEl?.querySelector('.canvas-node-container'),
+            node.nodeEl
+        ].filter(Boolean);
+        
+        elementsToUpdate.forEach(element => {
+            if (badgeText) {
+                element.setAttribute("data-badge", badgeText);
+                
+                // 判断徽章类型
+                const badgeType = this.determineBadgeType(badgeText);
+                element.setAttribute("data-badge-type", badgeType);
+            } else {
+                element.removeAttribute("data-badge");
+                element.removeAttribute("data-badge-type");
+            }
+        });
+    }
+
+    determineBadgeType(text: string): 'number' | 'text' | 'emoji' {
+        if (/^\d+$/.test(text)) {
+            return 'number';
+        } else if (this.isEmoji(text)) {
+            return 'emoji';
+        } else {
+            return 'text';
+        }
+    }
+
+    isEmoji(str: string): boolean {
+        const emojiRegex = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2000}-\u{206F}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}\u{3000}-\u{303F}]+$/u;
+        return emojiRegex.test(str);
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+}
+
+// 主插件类
 export default class Cardify extends Plugin {
 	settings: CardifySettings;
-	private styleEl: HTMLStyleElement | null = null;
+    
+    private styleEl: HTMLStyleElement | null = null;
 
-	// 确保样式存在
-	ensureStylesExist() {
-		if (!document.querySelector('#canvas-badge-styles')) {
-			this.injectStyles();
-		}
-	}
+    async loadSettings() {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    }
 
-	// 重新注入样式
-	reinjectStyles() {
-		// 移除旧样式
-		if (this.styleEl && this.styleEl.parentNode) {
-			this.styleEl.remove();
-		}
-		// 重新注入
-		this.injectStyles();
-	}
+    async saveSettings() {
+        await this.saveData(this.settings);
+    }
 
-	// 注入徽章样式
-	injectStyles() {
-		// 创建样式元素
-		this.styleEl = document.createElement("style");
-		this.styleEl.id = "canvas-badge-styles";
-		
-		// 使用高特异性的选择器和 !important 来确保样式生效
-		this.styleEl.textContent = `
-			/* 确保 Canvas 节点内容有相对定位 */
-			.canvas-node .canvas-node-content {
-				position: relative !important;
-			}
-			
-			/* 主要徽章样式 - 使用多个选择器以确保兼容性 */
-			.canvas-node .canvas-node-content[data-badge]::after,
-			.canvas-node-content[data-badge]::after,
-			.markdown-embed[data-badge]::after,
-			[data-badge].canvas-node-content::after {
-				content: attr(data-badge) !important;
-				position: absolute !important;
-				top: -10px !important;
-				right: -10px !important;
-				min-width: 22px !important;
-				height: 22px !important;
-				padding: 3px 7px !important;
-				display: flex !important;
-				align-items: center !important;
-				justify-content: center !important;
-				font-size: 12px !important;
-				font-weight: bold !important;
-				color: white !important;
-				background-color: #5865F2 !important;
-				border-radius: 11px !important;
-				z-index: 1000 !important;
-				box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
-				white-space: nowrap !important;
-				pointer-events: none !important;
-				line-height: 1 !important;
-				font-family: var(--font-interface) !important;
-				opacity: 1 !important;
-				visibility: visible !important;
-				border: 2px solid var(--background-primary) !important;
-			}
-			
-			/* 数字徽章样式 - 完美的圆形 */
-			.canvas-node-content[data-badge-type="number"]::after,
-			[data-badge-type="number"].canvas-node-content::after {
-				background-color: #5865F2 !important;
-				border-radius: 50% !important;
-				min-width: 24px !important;
-				height: 24px !important;
-				padding: 0 !important;
-			}
-			
-			/* 文字徽章样式 - 药丸形状 */
-			.canvas-node-content[data-badge-type="text"]::after,
-			[data-badge-type="text"].canvas-node-content::after {
-				background-color: #6c757d !important;
-				border-radius: 12px !important;
-				padding: 3px 10px !important;
-				min-width: auto !important;
-			}
-			
-			/* Emoji 徽章样式 - 更大，无背景 */
-			.canvas-node-content[data-badge-type="emoji"]::after,
-			[data-badge-type="emoji"].canvas-node-content::after {
-				background-color: transparent !important;
-				box-shadow: none !important;
-				border: none !important;
-				font-size: 20px !important;
-				min-width: auto !important;
-				height: auto !important;
-				padding: 0 !important;
-				top: -12px !important;
-				right: -12px !important;
-			}
-			
-			/* 选中状态下的徽章 */
-			.canvas-node.is-selected .canvas-node-content[data-badge]::after {
-				z-index: 1001 !important;
-			}
-			
-			/* 暗色主题优化 */
-			.theme-dark .canvas-node-content[data-badge]::after {
-				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
-			}
-			
-			/* 徽章出现动画 */
-			@keyframes badge-appear {
-				from {
-					transform: scale(0);
-					opacity: 0;
-				}
-				to {
-					transform: scale(1);
-					opacity: 1;
-				}
-			}
-			
-			.canvas-node-content[data-badge]::after {
-				animation: badge-appear 0.2s ease-out !important;
-			}
-			
-			/* 确保在缩放时徽章保持可见 */
-			.canvas-node-content[data-badge] {
-				overflow: visible !important;
-			}
-			
-			/* 备用方案：对容器元素也应用徽章 */
-			.canvas-node-container[data-badge]::after {
-				content: attr(data-badge) !important;
-				position: absolute !important;
-				top: -10px !important;
-				right: -10px !important;
-				min-width: 22px !important;
-				height: 22px !important;
-				padding: 3px 7px !important;
-				display: flex !important;
-				align-items: center !important;
-				justify-content: center !important;
-				font-size: 12px !important;
-				font-weight: bold !important;
-				color: white !important;
-				background-color: #ff5722 !important;
-				border-radius: 11px !important;
-				z-index: 999 !important;
-				box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
-				white-space: nowrap !important;
-				pointer-events: none !important;
-				border: 2px solid var(--background-primary) !important;
-			}
-			
-			/* 防止容器的徽章与内容的徽章重叠 */
-			.canvas-node-container[data-badge] .canvas-node-content[data-badge]::after {
-				display: flex !important; /* 优先显示内容上的徽章 */
-			}
-			
-			.canvas-node-container[data-badge]::after {
-				display: none !important; /* 如果内容有徽章，隐藏容器的徽章 */
-			}
-			
-			.canvas-node-container[data-badge]:not(:has(.canvas-node-content[data-badge]))::after {
-				display: flex !important; /* 只有内容没有徽章时，才显示容器的徽章 */
-			}
-		`;
-		
-		// 将样式添加到文档头部
-		document.head.appendChild(this.styleEl);
-		
-		console.log("Canvas badge styles injected successfully");
-	}
+    async onload() {
+        console.log("Loading Canvas Card Actions plugin with persistence");
 
-	addCopySortedCardsContentCommand(menu: any, canvas: any) {
-		const selection = canvas.selection;
-		if (!selection?.size || selection.size <= 1) {
-			return;
-		}
+        await this.loadSettings();
+        
+        // 注入样式
+        this.injectStyles();
+        
+        // 注册右键菜单
+        this.registerCanvasMenus();
+        
+        // 监听 Canvas 事件
+        this.registerCanvasEvents();
+        
+        // 初始化时加载所有徽章
+        this.app.workspace.onLayoutReady(() => {
+            this.loadAllCanvasBadges();
+        });
+    }
+    
+    registerCanvasMenus() {
+        // @ts-ignore
+        this.registerEvent(this.app.workspace.on("canvas:node-menu", (menu: any, node: any) => {
+            this.addBadgeCommand(menu, node);
+        }));
 
-		menu.addItem((item: any) => {
-			item
-				.setTitle("复制已排序的卡片内容")
-				.setIcon("copy-plus")
-				.setSection("action")
-				.onClick(async () => {
-					const selectedNodes: any[] = Array.from(selection.values());
-					const cardData = selectedNodes
-						.filter(node => node.getData().type === 'text' && node.getData().text)
-						.map(node => ({
-							text: node.getData().text,
-							x: node.x,
-							y: node.y
-						}));
-
-					// 根据设置的优先级进行排序
-					cardData.sort((a, b) => {
-						if (this.settings.sortPriority === 'yx') {
-							// 优先按y坐标排序（从上到下，然后从左到右）
-							if (a.y !== b.y) {
-								return a.y - b.y;
-							}
-							return a.x - b.x;
-						} else {
-							// 优先按x坐标排序（从左到右，然后从上到下）
-							if (a.x !== b.x) {
-								return a.x - b.x;
-							}
-							return a.y - b.y;
-						}
-					});
-
-					const combinedText = cardData.map(card => card.text).join('\n\n');
-
-					if (combinedText) {
-						await copyTextToClipboard(combinedText, `已复制 ${cardData.length} 张卡片的内容`);
-					}
-				});
-		});
-	}
-
-	addCopyCardContentCommand(menu: any, node: any) {
-		const nodeData = node.getData();
-		if (node.isEditing || nodeData.type !== 'text' || !nodeData.text) {
-			return;
-		}
-		menu.addItem((item: any) => {
-			item
-				.setTitle("复制卡片文本")
-				.setIcon("copy")
-				.setSection("action")
-				.onClick(async () => {
-					await copyTextToClipboard(nodeData.text);
-				});
-		});
-	}
-
-	addSplitCardCommand(menu: any, node: any) {
-		const nodeData = node.getData();
-		if (node.isEditing || nodeData.type !== 'text' || !nodeData.text) {
-			return;
-		}
-		menu.addItem((item: any) => {
-			item
-				.setTitle("按分隔符拆分卡片")
-				.setIcon("split")
-				.setSection("action")
-				.onClick(async () => {
-					const canvas = node.canvas;
-					const sections = nodeData.text.split(this.settings.canvasCardDelimiter);
-					if (sections.length <= 1) {
-						new Notice("卡片内容不包含分隔符，无法拆分。");
-						return;
-					}
-
-					const PADDING = 20;
-					const FIXED_CARD_HEIGHT = 60;
-
-					const x = node.x + node.width + PADDING;
-					let y = node.y;
-
-					for (const section of sections) {
-						const trimmedSection = section.trim();
-						if (trimmedSection === '') continue;
-
-						const newCardWidth = node.width;
-
-						const newNode = canvas.createTextNode({
-							pos: {
-								x: x,
-								y: y
-							},
-							text: trimmedSection,
-							focus: false,
-						});
-
-						newNode.resize({width: newCardWidth, height: FIXED_CARD_HEIGHT});
-
-						canvas.addNode(newNode);
-						y += FIXED_CARD_HEIGHT + PADDING;
-					}
-					canvas.requestSave(true, true);
-				});
-		});
-	}
-
-
-	// 获取卡片当前的徽章内容
-	async getCurrentBadge(node: any): Promise<string> {
-		// 从多个可能的位置尝试获取徽章
-		const possibleElements = [
-			node.nodeEl?.querySelector('.canvas-node-content'),
-			node.nodeEl?.querySelector('.canvas-node-container'),
-			node.nodeEl
-		].filter(Boolean);
-		
-		for (const element of possibleElements) {
-			const badge = element.getAttribute("data-badge");
-			if (badge) {
-				return badge;
-			}
-		}
-		
-		return "";
-	}
-
-	// 添加徽章命令到右键菜单
-	addBadgeCommand(menu: any, node: any) {
-		// 检查是否启用了徽章功能
-		if (!this.settings.enableBadges) {
-			return;
-		}
-		
-		const nodeData = node.getData();
-		if (nodeData.type !== 'text') {
-			return;
-		}
-
-		menu.addItem((item: any) => {
-			item
-				.setTitle("添加/编辑徽章")
-				.setIcon("tag")
-				.setSection("action")
-				.onClick(async () => {
-					const currentBadge = await this.getCurrentBadge(node);
-					new BadgeModal(this, node, currentBadge).open();
-				});
-		});
-	}
-
-	async onload() {
-		await this.loadSettings();
-
-		// 初始加载样式
-		this.injectStyles();
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new CardifySettingTab(this.app, this));
-
-		// @ts-ignore
-		this.registerEvent(this.app.workspace.on('canvas:node-menu', (menu: any, node: any) => {
-			const canvas = node.canvas;
-			const selection = canvas.selection;
-
-			if (selection?.size > 1) {
-				this.addCopySortedCardsContentCommand(menu, canvas);
-			} else {
-				this.addCopyCardContentCommand(menu, node);
-			}
-			this.addSplitCardCommand(menu, node);
-			this.addBadgeCommand(menu, node);
-		}));
-
-		// @ts-ignore
-		this.registerEvent(this.app.workspace.on('canvas:selection-menu', (menu: any, canvas: any) => {
-			const selection = canvas.selection;
-			if (selection?.size > 1) {
-				this.addCopySortedCardsContentCommand(menu, canvas);
-			} else if (selection?.size === 1) {
-				const node = Array.from(selection.values())[0];
-				this.addCopyCardContentCommand(menu, node);
-				this.addSplitCardCommand(menu, node);
-				this.addBadgeCommand(menu, node);
-			}
-		}));
-
-		// 监听文件变化，更新 Canvas 节点的徽章显示
-		this.registerEvent(this.app.metadataCache.on("changed", (file) => {
-			// 获取所有打开的 Canvas 视图
-			this.app.workspace.iterateAllLeaves((leaf) => {
-				// @ts-ignore
-				if (leaf.view?.constructor?.name === "CanvasView") {
-					// @ts-ignore
-					const canvas = leaf.view.canvas;
-					// 遍历所有节点
-					for (const node of canvas.nodes.values()) {
-						if (node.file === file) {
-							// 更新节点的徽章显示
-							this.updateNodeBadgeDisplay(node);
-						}
-					}
-				}
-			});
-		}));
-
-		// 监听布局变化，确保样式始终存在
-		this.registerEvent(
-			this.app.workspace.on("layout-change", () => {
-				this.ensureStylesExist();
-			})
-		);
-
-		// 监听文件打开事件
-		this.registerEvent(
-			this.app.workspace.on("file-open", () => {
-				setTimeout(() => {
-					this.ensureStylesExist();
-				}, 100);
-			})
-		);
-
-		// 初始化已打开的 Canvas 视图中的徽章显示
-		this.app.workspace.onLayoutReady(() => {
-			this.initializeAllCanvasBadges();
-			this.ensureStylesExist();
-		});
-	}
-
-	// 初始化所有 Canvas 视图中的徽章显示
-	initializeAllCanvasBadges() {
-		// 确保样式已加载
-		this.ensureStylesExist();
-		
-		this.app.workspace.iterateAllLeaves((leaf) => {
-			// @ts-ignore
-			if (leaf.view?.constructor?.name === "CanvasView") {
-				// @ts-ignore
-				const canvas = leaf.view.canvas;
-				// 遍历所有节点
-				for (const node of canvas.nodes.values()) {
-					// 更新节点的徽章显示
-					this.updateNodeBadgeDisplay(node);
-				}
-			}
-		});
-	}
-
-	// 更新节点的徽章显示
-	updateNodeBadgeDisplay(node: any) {
-		// 检查是否启用了徽章功能
-		if (!this.settings.enableBadges) {
-			// 如果未启用，确保移除所有徽章显示
-			const elementsToUpdate = [
-				node.nodeEl?.querySelector('.canvas-node-content'),
-				node.nodeEl?.querySelector('.canvas-node-container'),
-				node.nodeEl
-			].filter(Boolean);
-			
-			elementsToUpdate.forEach(element => {
-				element.removeAttribute("data-badge");
-				element.removeAttribute("data-badge-type");
-			});
-			return;
-		}
-		
-		// 确保样式存在
-		this.ensureStylesExist();
-	}
-
-	onunload() {
-		// 清理样式
-		if (this.styleEl && this.styleEl.parentNode) {
-			this.styleEl.remove();
-		}
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
+        // @ts-ignore
+        this.registerEvent(this.app.workspace.on("canvas:selection-menu", (menu: any, selection: any) => {
+            if (selection.size === 1) {
+                const node = Array.from(selection)[0];
+                this.addBadgeCommand(menu, node);
+            }
+        }));
+    }
+    
+    registerCanvasEvents() {
+        // 监听 Canvas 文件打开事件
+        this.registerEvent(
+            this.app.workspace.on("file-open", (file: TFile) => {
+                if (file && file.extension === "canvas") {
+                    // 延迟一下，确保 Canvas 完全加载
+                    setTimeout(() => {
+                        this.loadCanvasBadges(file);
+                    }, 100);
+                }
+            })
+        );
+        
+        // 监听布局变化，确保样式持续存在
+        this.registerEvent(
+            this.app.workspace.on("layout-change", () => {
+                this.ensureStylesExist();
+            })
+        );
+    }
+    
+    addBadgeCommand(menu: any, node: any) {
+        // 检查是否是可以添加徽章的节点
+        const isTextCard = node.text !== undefined;
+        const isMarkdownEmbed = node.nodeEl?.querySelector('.markdown-embed') !== null;
+        
+        if (isTextCard || isMarkdownEmbed) {
+            menu.addItem((item: any) => {
+                item
+                    .setTitle("添加/编辑徽章")
+                    .setIcon("tag")
+                    .onClick(async () => {
+                        const currentBadge = await this.getCurrentBadge(node);
+                        new BadgeModal(this, node, currentBadge).open();
+                    });
+            });
+        }
+    }
+    
+    async getCurrentBadge(node: any): Promise<string> {
+        // 首先尝试从 Canvas 数据中获取
+        try {
+            const canvas = node.canvas;
+            if (canvas && canvas.getData) {
+                const canvasData = canvas.getData();
+                const nodeData = canvasData.nodes.find((n: CanvasNodeData) => n.id === node.id);
+                if (nodeData && nodeData.badge) {
+                    return nodeData.badge;
+                }
+            }
+        } catch (error) {
+            console.log("从 Canvas 数据获取徽章失败，尝试从 DOM 获取");
+        }
+        
+        // 降级方案：从 DOM 获取
+        const possibleElements = [
+            node.nodeEl?.querySelector('.canvas-node-content'),
+            node.nodeEl?.querySelector('.canvas-node-container'),
+            node.nodeEl
+        ].filter(Boolean);
+        
+        for (const element of possibleElements) {
+            const badge = element.getAttribute("data-badge");
+            if (badge) {
+                return badge;
+            }
+        }
+        
+        return "";
+    }
+    
+    async persistBadgeToCanvas(node: any, badgeText: string) {
+        const canvas = node.canvas;
+        if (!canvas || !canvas.getData || !canvas.setData) {
+            console.error("无法访问 Canvas 数据");
+            throw new Error("无法访问 Canvas 数据");
+        }
+        
+        // 获取当前 Canvas 的完整数据
+        const canvasData = canvas.getData();
+        
+        // 找到对应的节点数据
+        const nodeData = canvasData.nodes.find((n: CanvasNodeData) => n.id === node.id);
+        if (!nodeData) {
+            console.error("在 Canvas 数据中找不到节点");
+            throw new Error("在 Canvas 数据中找不到节点");
+        }
+        
+        // 更新节点数据
+        if (badgeText) {
+            nodeData.badge = badgeText;
+            nodeData.badgeType = this.determineBadgeType(badgeText);
+        } else {
+            // 移除徽章
+            delete nodeData.badge;
+            delete nodeData.badgeType;
+        }
+        
+        // 保存修改后的数据回 Canvas
+        await canvas.setData(canvasData);
+        
+        // 请求保存文件
+        await canvas.requestSave();
+        
+        console.log(`徽章已持久化: ${badgeText || '(已移除)'}`);
+    }
+    
+    determineBadgeType(text: string): 'number' | 'text' | 'emoji' {
+        if (/^\d+$/.test(text)) {
+            return 'number';
+        } else if (this.isEmoji(text)) {
+            return 'emoji';
+        } else {
+            return 'text';
+        }
+    }
+    
+    isEmoji(str: string): boolean {
+        const emojiRegex = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]+$/u;
+        return emojiRegex.test(str);
+    }
+    
+    async loadCanvasBadges(file: TFile) {
+        const leaves = this.app.workspace.getLeavesOfType("canvas");
+        
+        for (const leaf of leaves) {
+            const view = leaf.view as any;
+            if (view.file?.path === file.path) {
+                const canvas = view.canvas;
+                if (!canvas) continue;
+                
+                try {
+                    const canvasData = canvas.getData();
+                    
+                    // 遍历所有节点
+                    canvasData.nodes.forEach((nodeData: CanvasNodeData) => {
+                        if (nodeData.badge) {
+                            // 找到对应的 DOM 节点
+                            const node = canvas.nodes?.get(nodeData.id);
+                            if (node) {
+                                this.applyBadgeToNode(node, nodeData.badge, nodeData.badgeType);
+                            }
+                        }
+                    });
+                    
+                    console.log(`已加载 ${file.name} 的所有徽章`);
+                } catch (error) {
+                    console.error("加载 Canvas 徽章时出错:", error);
+                }
+            }
+        }
+    }
+    
+    loadAllCanvasBadges() {
+        // 加载所有打开的 Canvas 的徽章
+        const canvasLeaves = this.app.workspace.getLeavesOfType("canvas");
+        
+        canvasLeaves.forEach((leaf) => {
+            const view = leaf.view as any;
+            if (view.file) {
+                this.loadCanvasBadges(view.file);
+            }
+        });
+    }
+    
+    applyBadgeToNode(node: any, badgeText: string, badgeType?: string) {
+        // 应用徽章到节点的 DOM 元素
+        const elementsToUpdate = [
+            node.nodeEl?.querySelector('.canvas-node-content'),
+            node.nodeEl?.querySelector('.canvas-node-container'),
+            node.nodeEl
+        ].filter(Boolean);
+        
+        elementsToUpdate.forEach(element => {
+            element.setAttribute("data-badge", badgeText);
+            if (badgeType) {
+                element.setAttribute("data-badge-type", badgeType);
+            } else {
+                // 如果没有指定类型，自动判断
+                const type = this.determineBadgeType(badgeText);
+                element.setAttribute("data-badge-type", type);
+            }
+        });
+    }
+    
+    ensureStylesExist() {
+        if (!document.querySelector('#canvas-badge-styles')) {
+            this.injectStyles();
+        }
+    }
+    
+    injectStyles() {
+        // 如果已存在，先移除
+        if (this.styleEl && this.styleEl.parentNode) {
+            this.styleEl.remove();
+        }
+        
+        this.styleEl = document.createElement("style");
+        this.styleEl.id = "canvas-badge-styles";
+        
+        // 使用高优先级的 CSS 规则
+        this.styleEl.textContent = `
+            /* 确保 Canvas 节点内容有相对定位 */
+            .canvas-node .canvas-node-content {
+                position: relative !important;
+            }
+            
+            /* 主要徽章样式 */
+            .canvas-node .canvas-node-content[data-badge]::after,
+            .canvas-node-content[data-badge]::after,
+            .markdown-embed[data-badge]::after {
+                content: attr(data-badge) !important;
+                position: absolute !important;
+                top: -10px !important;
+                right: -10px !important;
+                min-width: 24px !important;
+                height: 24px !important;
+                padding: 3px 7px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                font-size: 12px !important;
+                font-weight: bold !important;
+                color: white !important;
+                background-color: #5865F2 !important;
+                border-radius: 12px !important;
+                z-index: 1000 !important;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+                white-space: nowrap !important;
+                pointer-events: none !important;
+                line-height: 1 !important;
+                font-family: var(--font-interface) !important;
+                border: 2px solid var(--background-primary) !important;
+                animation: badge-appear 0.2s ease-out !important;
+            }
+            
+            /* 数字徽章 - 完美圆形 */
+            .canvas-node-content[data-badge-type="number"]::after {
+                background-color: #5865F2 !important;
+                border-radius: 50% !important;
+                padding: 0 !important;
+                min-width: 26px !important;
+                height: 26px !important;
+            }
+            
+            /* 文字徽章 - 药丸形状 */
+            .canvas-node-content[data-badge-type="text"]::after {
+                background-color: #6c757d !important;
+                border-radius: 13px !important;
+                padding: 3px 10px !important;
+                min-width: auto !important;
+            }
+            
+            /* Emoji 徽章 - 无背景 */
+            .canvas-node-content[data-badge-type="emoji"]::after {
+                background-color: transparent !important;
+                box-shadow: none !important;
+                border: none !important;
+                font-size: 20px !important;
+                min-width: auto !important;
+                height: auto !important;
+                padding: 0 !important;
+            }
+            
+            /* 动画效果 */
+            @keyframes badge-appear {
+                from {
+                    transform: scale(0);
+                    opacity: 0;
+                }
+                to {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+            
+            /* 确保徽章在节点被选中时仍然可见 */
+            .canvas-node.is-selected .canvas-node-content[data-badge]::after {
+                z-index: 1001 !important;
+            }
+            
+            /* 暗色主题优化 */
+            .theme-dark .canvas-node-content[data-badge]::after {
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+            }
+        `;
+        
+        document.head.appendChild(this.styleEl);
+        console.log("Canvas badge styles injected with persistence support");
+    }
+    
+    onunload() {
+        if (this.styleEl && this.styleEl.parentNode) {
+            this.styleEl.remove();
+        }
+        console.log("Canvas Card Actions plugin unloaded");
+    }
 }
