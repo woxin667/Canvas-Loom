@@ -59,35 +59,49 @@ class BadgeModal extends Modal {
 	}
 
 	async setBadge(badgeText: string) {
-		// 直接在卡片上设置徽章，不依赖文件
+		// 我们需要在多个元素上设置属性，以确保兼容性
+		const elementsToUpdate = [
+			this.node.nodeEl?.querySelector('.canvas-node-content'),
+			this.node.nodeEl?.querySelector('.canvas-node-container'),
+			this.node.nodeEl
+		].filter(Boolean);
+		
+		if (elementsToUpdate.length === 0) {
+			console.error("无法找到合适的元素来设置徽章");
+			new Notice("设置徽章失败：无法找到卡片元素");
+			return;
+		}
+		
 		try {
-			// 更新节点元素的 data-badge 属性
-			if (this.node.nodeEl) {
+			elementsToUpdate.forEach(element => {
 				if (badgeText) {
-					this.node.nodeEl.setAttribute("data-badge", badgeText);
+					// 设置徽章属性
+					element.setAttribute("data-badge", badgeText);
 					
-					// 设置徽章类型
+					// 判断徽章类型
 					if (/^\d+$/.test(badgeText)) {
-						this.node.nodeEl.setAttribute("data-badge-type", "number");
+						element.setAttribute("data-badge-type", "number");
 					} else if (/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(badgeText)) {
-						this.node.nodeEl.setAttribute("data-badge-type", "emoji");
+						element.setAttribute("data-badge-type", "emoji");
 					} else {
-						this.node.nodeEl.setAttribute("data-badge-type", "text");
+						element.setAttribute("data-badge-type", "text");
 					}
 				} else {
-					this.node.nodeEl.removeAttribute("data-badge");
-					this.node.nodeEl.removeAttribute("data-badge-type");
+					// 移除徽章
+					element.removeAttribute("data-badge");
+					element.removeAttribute("data-badge-type");
 				}
-				
-				// 通知用户
-				if (badgeText) {
-					new Notice(`徽章已设置为: ${badgeText}`);
-				} else {
-					new Notice("徽章已移除");
-				}
+			});
+			
+			// 通知用户
+			if (badgeText) {
+				new Notice(`徽章已设置为: ${badgeText}`);
 			} else {
-				new Notice("无法访问卡片元素");
+				new Notice("徽章已移除");
 			}
+			
+			// 重新注入样式以确保生效
+			this.plugin.reinjectStyles();
 		} catch (error) {
 			console.error("设置徽章时出错:", error);
 			new Notice("设置徽章时出错，请查看控制台了解详情");
@@ -107,6 +121,176 @@ const DEFAULT_SETTINGS: CardifySettings = {
 }
 export default class Cardify extends Plugin {
 	settings: CardifySettings;
+	private styleEl: HTMLStyleElement | null = null;
+
+	// 确保样式存在
+	ensureStylesExist() {
+		if (!document.querySelector('#canvas-badge-styles')) {
+			this.injectStyles();
+		}
+	}
+
+	// 重新注入样式
+	reinjectStyles() {
+		// 移除旧样式
+		if (this.styleEl && this.styleEl.parentNode) {
+			this.styleEl.remove();
+		}
+		// 重新注入
+		this.injectStyles();
+	}
+
+	// 注入徽章样式
+	injectStyles() {
+		// 创建样式元素
+		this.styleEl = document.createElement("style");
+		this.styleEl.id = "canvas-badge-styles";
+		
+		// 使用高特异性的选择器和 !important 来确保样式生效
+		this.styleEl.textContent = `
+			/* 确保 Canvas 节点内容有相对定位 */
+			.canvas-node .canvas-node-content {
+				position: relative !important;
+			}
+			
+			/* 主要徽章样式 - 使用多个选择器以确保兼容性 */
+			.canvas-node .canvas-node-content[data-badge]::after,
+			.canvas-node-content[data-badge]::after,
+			.markdown-embed[data-badge]::after,
+			[data-badge].canvas-node-content::after {
+				content: attr(data-badge) !important;
+				position: absolute !important;
+				top: -10px !important;
+				right: -10px !important;
+				min-width: 22px !important;
+				height: 22px !important;
+				padding: 3px 7px !important;
+				display: flex !important;
+				align-items: center !important;
+				justify-content: center !important;
+				font-size: 12px !important;
+				font-weight: bold !important;
+				color: white !important;
+				background-color: #5865F2 !important;
+				border-radius: 11px !important;
+				z-index: 1000 !important;
+				box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+				white-space: nowrap !important;
+				pointer-events: none !important;
+				line-height: 1 !important;
+				font-family: var(--font-interface) !important;
+				opacity: 1 !important;
+				visibility: visible !important;
+				border: 2px solid var(--background-primary) !important;
+			}
+			
+			/* 数字徽章样式 - 完美的圆形 */
+			.canvas-node-content[data-badge-type="number"]::after,
+			[data-badge-type="number"].canvas-node-content::after {
+				background-color: #5865F2 !important;
+				border-radius: 50% !important;
+				min-width: 24px !important;
+				height: 24px !important;
+				padding: 0 !important;
+			}
+			
+			/* 文字徽章样式 - 药丸形状 */
+			.canvas-node-content[data-badge-type="text"]::after,
+			[data-badge-type="text"].canvas-node-content::after {
+				background-color: #6c757d !important;
+				border-radius: 12px !important;
+				padding: 3px 10px !important;
+				min-width: auto !important;
+			}
+			
+			/* Emoji 徽章样式 - 更大，无背景 */
+			.canvas-node-content[data-badge-type="emoji"]::after,
+			[data-badge-type="emoji"].canvas-node-content::after {
+				background-color: transparent !important;
+				box-shadow: none !important;
+				border: none !important;
+				font-size: 20px !important;
+				min-width: auto !important;
+				height: auto !important;
+				padding: 0 !important;
+				top: -12px !important;
+				right: -12px !important;
+			}
+			
+			/* 选中状态下的徽章 */
+			.canvas-node.is-selected .canvas-node-content[data-badge]::after {
+				z-index: 1001 !important;
+			}
+			
+			/* 暗色主题优化 */
+			.theme-dark .canvas-node-content[data-badge]::after {
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+			}
+			
+			/* 徽章出现动画 */
+			@keyframes badge-appear {
+				from {
+					transform: scale(0);
+					opacity: 0;
+				}
+				to {
+					transform: scale(1);
+					opacity: 1;
+				}
+			}
+			
+			.canvas-node-content[data-badge]::after {
+				animation: badge-appear 0.2s ease-out !important;
+			}
+			
+			/* 确保在缩放时徽章保持可见 */
+			.canvas-node-content[data-badge] {
+				overflow: visible !important;
+			}
+			
+			/* 备用方案：对容器元素也应用徽章 */
+			.canvas-node-container[data-badge]::after {
+				content: attr(data-badge) !important;
+				position: absolute !important;
+				top: -10px !important;
+				right: -10px !important;
+				min-width: 22px !important;
+				height: 22px !important;
+				padding: 3px 7px !important;
+				display: flex !important;
+				align-items: center !important;
+				justify-content: center !important;
+				font-size: 12px !important;
+				font-weight: bold !important;
+				color: white !important;
+				background-color: #ff5722 !important;
+				border-radius: 11px !important;
+				z-index: 999 !important;
+				box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+				white-space: nowrap !important;
+				pointer-events: none !important;
+				border: 2px solid var(--background-primary) !important;
+			}
+			
+			/* 防止容器的徽章与内容的徽章重叠 */
+			.canvas-node-container[data-badge] .canvas-node-content[data-badge]::after {
+				display: flex !important; /* 优先显示内容上的徽章 */
+			}
+			
+			.canvas-node-container[data-badge]::after {
+				display: none !important; /* 如果内容有徽章，隐藏容器的徽章 */
+			}
+			
+			.canvas-node-container[data-badge]:not(:has(.canvas-node-content[data-badge]))::after {
+				display: flex !important; /* 只有内容没有徽章时，才显示容器的徽章 */
+			}
+		`;
+		
+		// 将样式添加到文档头部
+		document.head.appendChild(this.styleEl);
+		
+		console.log("Canvas badge styles injected successfully");
+	}
 
 	addCopySortedCardsContentCommand(menu: any, canvas: any) {
 		const selection = canvas.selection;
@@ -223,10 +407,20 @@ export default class Cardify extends Plugin {
 
 	// 获取卡片当前的徽章内容
 	async getCurrentBadge(node: any): Promise<string> {
-		// 从卡片元素的属性中获取徽章信息
-		if (node.nodeEl) {
-			return node.nodeEl.getAttribute("data-badge") || "";
+		// 从多个可能的位置尝试获取徽章
+		const possibleElements = [
+			node.nodeEl?.querySelector('.canvas-node-content'),
+			node.nodeEl?.querySelector('.canvas-node-container'),
+			node.nodeEl
+		].filter(Boolean);
+		
+		for (const element of possibleElements) {
+			const badge = element.getAttribute("data-badge");
+			if (badge) {
+				return badge;
+			}
 		}
+		
 		return "";
 	}
 
@@ -256,6 +450,9 @@ export default class Cardify extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+
+		// 初始加载样式
+		this.injectStyles();
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new CardifySettingTab(this.app, this));
@@ -306,14 +503,34 @@ export default class Cardify extends Plugin {
 			});
 		}));
 
+		// 监听布局变化，确保样式始终存在
+		this.registerEvent(
+			this.app.workspace.on("layout-change", () => {
+				this.ensureStylesExist();
+			})
+		);
+
+		// 监听文件打开事件
+		this.registerEvent(
+			this.app.workspace.on("file-open", () => {
+				setTimeout(() => {
+					this.ensureStylesExist();
+				}, 100);
+			})
+		);
+
 		// 初始化已打开的 Canvas 视图中的徽章显示
 		this.app.workspace.onLayoutReady(() => {
 			this.initializeAllCanvasBadges();
+			this.ensureStylesExist();
 		});
 	}
 
 	// 初始化所有 Canvas 视图中的徽章显示
 	initializeAllCanvasBadges() {
+		// 确保样式已加载
+		this.ensureStylesExist();
+		
 		this.app.workspace.iterateAllLeaves((leaf) => {
 			// @ts-ignore
 			if (leaf.view?.constructor?.name === "CanvasView") {
@@ -333,22 +550,29 @@ export default class Cardify extends Plugin {
 		// 检查是否启用了徽章功能
 		if (!this.settings.enableBadges) {
 			// 如果未启用，确保移除所有徽章显示
-			if (node.nodeEl) {
-				node.nodeEl.removeAttribute("data-badge");
-				node.nodeEl.removeAttribute("data-badge-type");
-			}
+			const elementsToUpdate = [
+				node.nodeEl?.querySelector('.canvas-node-content'),
+				node.nodeEl?.querySelector('.canvas-node-container'),
+				node.nodeEl
+			].filter(Boolean);
+			
+			elementsToUpdate.forEach(element => {
+				element.removeAttribute("data-badge");
+				element.removeAttribute("data-badge-type");
+			});
 			return;
 		}
 		
-		// 直接从卡片元素的属性中获取徽章信息
-		if (node.nodeEl) {
-			// 徽章信息已经存储在 data-badge 属性中，无需额外处理
-			// 这里可以添加任何需要的更新逻辑
-			return;
-		}
+		// 确保样式存在
+		this.ensureStylesExist();
 	}
 
-	onunload() {}
+	onunload() {
+		// 清理样式
+		if (this.styleEl && this.styleEl.parentNode) {
+			this.styleEl.remove();
+		}
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
