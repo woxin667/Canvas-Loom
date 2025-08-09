@@ -302,8 +302,8 @@ export default class Cardify extends Plugin {
             const newNode = {
                 ...nodeData,
                 id: `${Math.random().toString(36).substr(2, 9)}`,
-                x: nodeData.x,
-                y: nodeData.y + (nodeData.height + 20) * i,
+                x: nodeData.x + (nodeData.width + 20) * i,
+                y: nodeData.y,
                 text: parts[i],
             };
             newNodes.push(newNode);
