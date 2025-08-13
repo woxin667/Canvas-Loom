@@ -218,10 +218,17 @@ export default class Cardify extends Plugin {
 
         // @ts-ignore
         this.registerEvent(this.app.workspace.on("canvas:selection-menu", (menu: any, selection: any) => {
+            // 处理徽章命令
             if (selection.size === 1) {
                 const node = Array.from(selection)[0];
                 this.addBadgeCommand(menu, node);
             }
+            
+            // 添加按徽章顺序复制命令
+            this.addCopyByBadgeOrderCommand(menu, selection);
+            
+            // 添加按位置复制命令
+            this.addCopyByPositionCommand(menu, selection);
         }));
     }
     
@@ -582,6 +589,199 @@ export default class Cardify extends Plugin {
         
         document.head.appendChild(this.styleEl);
         console.log("Canvas badge styles injected with persistence support");
+    }
+    
+    addCopyByBadgeOrderCommand(menu: any, selection: any) {
+        menu.addItem((item: any) => {
+            item
+                .setTitle("按徽章顺序复制内容")
+                .setIcon("sort-asc")
+                .onClick(() => {
+                    this.copyContentByBadgeOrder(selection);
+                });
+        });
+    }
+    
+    addCopyByPositionCommand(menu: any, selection: any) {
+        menu.addItem((item: any) => {
+            item
+                .setTitle("按位置复制内容")
+                .setIcon("map-pin")
+                .onClick(() => {
+                    this.copyContentByPosition(selection);
+                });
+        });
+    }
+    
+    async copyContentByBadgeOrder(selection: any) {
+        try {
+            // 获取当前活动的Canvas视图
+            const activeLeaf = this.app.workspace.activeLeaf;
+            if (!activeLeaf || activeLeaf.view.getViewType() !== 'canvas') {
+                new Notice("请在Canvas视图中使用此功能");
+                return;
+            }
+            
+            const canvas = (activeLeaf.view as any).canvas;
+            if (!canvas) {
+                new Notice("无法获取Canvas实例");
+                return;
+            }
+            
+            // 从canvas.selection直接获取选中的节点
+            if (!canvas.selection || canvas.selection.size === 0) {
+                new Notice("请先选择要复制的卡片");
+                return;
+            }
+            
+            // 将选中的节点转换为数组
+            const selectedNodes = Array.from(canvas.selection);
+            console.log(`Canvas selection contains ${selectedNodes.length} nodes`);
+            
+            // 查找带徽章的卡片
+            const badgedCards: Array<{text: string, badge: string, badgeType: string}> = [];
+            
+            for (const node of selectedNodes) {
+                const nodeData = (node as any).getData();
+                if (nodeData.type === 'text' && nodeData.text && nodeData.text.trim()) {
+                    // 检查节点是否有徽章
+                    const badge = await this.getCurrentBadge(node as any);
+                    if (badge) {
+                        const badgeType = this.determineBadgeType(badge);
+                        badgedCards.push({
+                            text: nodeData.text.trim(),
+                            badge: badge,
+                            badgeType: badgeType
+                        });
+                    }
+                }
+            }
+            
+            console.log(`找到 ${badgedCards.length} 个带徽章的卡片，选中了 ${selectedNodes.length} 个节点`);
+            
+            if (badgedCards.length === 0) {
+                new Notice("选中的卡片中没有找到带徽章的卡片");
+                return;
+            }
+            
+            // 按徽章排序
+            const sortedCards = this.sortCardsByBadge(badgedCards);
+            
+            // 拼接内容并复制
+            const content = this.formatBadgedCardsContent(sortedCards);
+            
+            await copyTextToClipboard(content, `已按徽章顺序复制 ${sortedCards.length} 张卡片的内容`);
+            
+        } catch (error) {
+            console.error("按徽章顺序复制失败:", error);
+            new Notice("复制失败，请查看控制台了解详情");
+        }
+    }
+    
+    async copyContentByPosition(selection: any) {
+        try {
+            // 获取当前活动的Canvas视图
+            const activeLeaf = this.app.workspace.activeLeaf;
+            if (!activeLeaf || activeLeaf.view.getViewType() !== 'canvas') {
+                new Notice("请在Canvas视图中使用此功能");
+                return;
+            }
+            
+            const canvas = (activeLeaf.view as any).canvas;
+            if (!canvas) {
+                new Notice("无法获取Canvas实例");
+                return;
+            }
+            
+            // 从canvas.selection直接获取选中的节点
+            if (!canvas.selection || canvas.selection.size === 0) {
+                new Notice("请先选择要复制的卡片");
+                return;
+            }
+            
+            // 将选中的节点转换为数组，并提取文本卡片数据
+            const selectedNodes = Array.from(canvas.selection);
+            console.log(`Canvas selection contains ${selectedNodes.length} nodes`);
+            
+            // 查找选中的文本卡片
+            const cards: Array<{text: string, x: number, y: number}> = [];
+            
+            selectedNodes.forEach((node: any) => {
+                const nodeData = (node as any).getData();
+                if (nodeData.type === 'text' && nodeData.text && nodeData.text.trim()) {
+                    cards.push({
+                        text: nodeData.text.trim(),
+                        x: nodeData.x,
+                        y: nodeData.y
+                    });
+                }
+            });
+            
+            console.log(`找到 ${cards.length} 个文本卡片，选中了 ${selectedNodes.length} 个节点`);
+            
+            if (cards.length === 0) {
+                new Notice("没有选中任何文本卡片");
+                return;
+            }
+            
+            // 按位置排序
+            const sortedCards = this.sortCardsByPosition(cards);
+            
+            // 拼接内容并复制
+            const content = sortedCards.map(card => card.text).join('\n\n');
+            
+            await copyTextToClipboard(content, `已按位置顺序复制 ${sortedCards.length} 张卡片的内容`);
+            
+        } catch (error) {
+            console.error("按位置复制失败:", error);
+            new Notice("复制失败，请查看控制台了解详情");
+        }
+    }
+    
+    sortCardsByBadge(cards: Array<{text: string, badge: string, badgeType: string}>): Array<{text: string, badge: string, badgeType: string}> {
+        return cards.sort((a, b) => {
+            // 按类型优先级排序：number < text < emoji
+            const typeOrder = { 'number': 1, 'text': 2, 'emoji': 3 };
+            const aTypeOrder = typeOrder[a.badgeType as keyof typeof typeOrder] || 4;
+            const bTypeOrder = typeOrder[b.badgeType as keyof typeof typeOrder] || 4;
+            
+            if (aTypeOrder !== bTypeOrder) {
+                return aTypeOrder - bTypeOrder;
+            }
+            
+            // 相同类型内部排序
+            if (a.badgeType === 'number') {
+                // 数字徽章按数值排序
+                const aNum = parseInt(a.badge) || 0;
+                const bNum = parseInt(b.badge) || 0;
+                return aNum - bNum;
+            } else {
+                // 文字和emoji按字典序排序
+                return a.badge.localeCompare(b.badge);
+            }
+        });
+    }
+    
+    sortCardsByPosition(cards: Array<{text: string, x: number, y: number}>): Array<{text: string, x: number, y: number}> {
+        return cards.sort((a, b) => {
+            if (this.settings.sortPriority === 'yx') {
+                // 优先按y坐标排序（从上到下），然后按x坐标排序（从左到右）
+                if (Math.abs(a.y - b.y) > 10) {
+                    return a.y - b.y;
+                }
+                return a.x - b.x;
+            } else {
+                // 优先按x坐标排序（从左到右），然后按y坐标排序（从上到下）
+                if (Math.abs(a.x - b.x) > 10) {
+                    return a.x - b.x;
+                }
+                return a.y - b.y;
+            }
+        });
+    }
+    
+    formatBadgedCardsContent(cards: Array<{text: string, badge: string, badgeType: string}>): string {
+        return cards.map(card => `[${card.badge}] ${card.text}`).join('\n\n');
     }
     
     onunload() {
