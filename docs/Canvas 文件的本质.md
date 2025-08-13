@@ -1,3 +1,5 @@
+Obsidian Canvas 有两种卡片：文本卡片和文档卡片。
+
 当你在 Obsidian 中创建一个 Canvas 时，它实际上会生成一个 .canvas 文件。这个文件本质上是一个 JSON 文件，存储了 Canvas 中所有节点和连接的完整信息。让我通过一个例子来说明：
 
 ```json
