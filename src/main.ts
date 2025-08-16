@@ -45,12 +45,12 @@ export default class Cardify extends Plugin {
     }
 
     private async initializeServices(): Promise<void> {
-        // 初始化设置
-        await this.loadSettings();
-        
         // 初始化适配器（不依赖Canvas的服务）
         this.clipboardAdapter = new ClipboardAdapter();
         this.storageAdapter = new StorageAdapter(this, DEFAULT_SETTINGS);
+        
+        // 初始化设置
+        await this.loadSettings();
         
         // 初始化服务（这些服务在Canvas打开时会被重新配置）
         this.commandRegistry = new CommandRegistry();
@@ -116,22 +116,22 @@ export default class Cardify extends Plugin {
                 },
                 node
             );
-            this.commandRegistry.addCommandToMenu(menu, 'open-badge-modal', '添加/编辑徽章', 'tag');
             this.commandRegistry.registerCommand('open-badge-modal', badgeCommand);
+            this.commandRegistry.addCommandToMenu(menu, 'open-badge-modal', '添加/编辑徽章', 'tag');
         }
 
         // 拆分卡片命令
         if (node.text && this.cardService) {
             const splitCommand = new SplitCardCommand(this.cardService, node, this.settings.canvasCardDelimiter);
-            this.commandRegistry.addCommandToMenu(menu, 'split-card', '按分隔符拆分卡片', 'split');
             this.commandRegistry.registerCommand('split-card', splitCommand);
+            this.commandRegistry.addCommandToMenu(menu, 'split-card', '按分隔符拆分卡片', 'split');
         }
 
         // 复制单卡内容命令
         if (node.text && this.contentService) {
             const copyCommand = new CopySingleCardCommand(this.contentService, node);
-            this.commandRegistry.addCommandToMenu(menu, 'copy-single-card', '复制卡片内容', 'copy');
             this.commandRegistry.registerCommand('copy-single-card', copyCommand);
+            this.commandRegistry.addCommandToMenu(menu, 'copy-single-card', '复制卡片内容', 'copy');
         }
     }
 
@@ -146,13 +146,13 @@ export default class Cardify extends Plugin {
             selectionArray, 
             this.settings.sortPriority
         );
-        this.commandRegistry.addCommandToMenu(menu, 'copy-by-position', '按位置复制内容', 'map-pin');
         this.commandRegistry.registerCommand('copy-by-position', copyByPositionCommand);
+        this.commandRegistry.addCommandToMenu(menu, 'copy-by-position', '按位置复制内容', 'map-pin');
 
         // 按徽章顺序复制命令
         const copyByBadgeCommand = new CopyByBadgeOrderCommand(this.contentService, selectionArray);
-        this.commandRegistry.addCommandToMenu(menu, 'copy-by-badge', '按徽章顺序复制内容', 'sort-asc');
         this.commandRegistry.registerCommand('copy-by-badge', copyByBadgeCommand);
+        this.commandRegistry.addCommandToMenu(menu, 'copy-by-badge', '按徽章顺序复制内容', 'sort-asc');
     }
 
     registerCanvasEvents() {
