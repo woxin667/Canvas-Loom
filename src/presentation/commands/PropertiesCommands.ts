@@ -1,5 +1,6 @@
 import { Notice } from "obsidian";
 import { CardPropertiesModal } from "../modals/CardPropertiesModal";
+import { SingleCardPropertiesModal } from "../modals/SingleCardPropertiesModal";
 import { CardService } from "../../services/CardService";
 
 export class OpenCardPropertiesCommand {
@@ -27,9 +28,16 @@ export class OpenCardPropertiesCommand {
         return;
       }
       
-      // 打开属性查看器模态框
-      const modal = new CardPropertiesModal(this.app, textCards, this.cardService);
-      modal.open();
+      // 根据卡片数量选择不同的查看器
+      if (textCards.length === 1) {
+        // 单卡片使用专门的编辑器
+        const modal = new SingleCardPropertiesModal(this.app, textCards[0], this.cardService);
+        modal.open();
+      } else {
+        // 多卡片使用批量管理器
+        const modal = new CardPropertiesModal(this.app, textCards, this.cardService);
+        modal.open();
+      }
       
     } catch (error) {
       console.error("打开卡片属性查看器失败:", error);

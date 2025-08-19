@@ -167,8 +167,8 @@ export default class Cardify extends Plugin {
             this.commandRegistry.addCommandToMenu(
                 menu, 
                 "open-single-card-properties", 
-                "查看卡片属性...", 
-                "info"
+                "编辑卡片尺寸...", 
+                "edit"
             );
 
             // 可选：同时添加复制尺寸功能
@@ -242,8 +242,8 @@ export default class Cardify extends Plugin {
         this.commandRegistry.addCommandToMenu(
             menu, 
             "open-card-properties", 
-            "查看卡片属性...", 
-            "info"
+            "批量管理卡片属性...", 
+            "settings"
         );
         
         // ===== 新增：复制卡片尺寸信息 =====
