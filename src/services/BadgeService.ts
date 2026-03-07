@@ -23,17 +23,10 @@ export class BadgeService implements IBadgeService {
                 return BadgeData.create(nodeData.badge);
             }
         } catch (error) {
-            console.log("从 Canvas 数据获取徽章失败，尝试从 DOM 获取");
         }
 
         // 降级方案：从 DOM 获取
-        const possibleElements = [
-            node.nodeEl?.querySelector('.canvas-node-content'),
-            node.nodeEl?.querySelector('.canvas-node-container'),
-            node.nodeEl
-        ].filter(Boolean);
-
-        for (const element of possibleElements) {
+        for (const element of this.getNodeElements(node)) {
             const badge = element.getAttribute("data-badge");
             if (badge) {
                 return BadgeData.create(badge);
@@ -78,29 +71,25 @@ export class BadgeService implements IBadgeService {
     }
 
     applyBadgeToNode(node: any, badge: BadgeData): void {
-        const elementsToUpdate = [
-            node.nodeEl?.querySelector('.canvas-node-content'),
-            node.nodeEl?.querySelector('.canvas-node-container'),
-            node.nodeEl
-        ].filter(Boolean);
-
-        elementsToUpdate.forEach(element => {
+        this.getNodeElements(node).forEach(element => {
             element.setAttribute("data-badge", badge.content);
             element.setAttribute("data-badge-type", badge.type);
         });
     }
 
     private removeBadgeFromNode(node: any): void {
-        const elementsToUpdate = [
+        this.getNodeElements(node).forEach(element => {
+            element.removeAttribute("data-badge");
+            element.removeAttribute("data-badge-type");
+        });
+    }
+
+    private getNodeElements(node: any): Element[] {
+        return [
             node.nodeEl?.querySelector('.canvas-node-content'),
             node.nodeEl?.querySelector('.canvas-node-container'),
             node.nodeEl
         ].filter(Boolean);
-
-        elementsToUpdate.forEach(element => {
-            element.removeAttribute("data-badge");
-            element.removeAttribute("data-badge-type");
-        });
     }
 
     private async persistBadgeToCanvas(node: any, badge: BadgeData | null): Promise<void> {
@@ -121,8 +110,6 @@ export class BadgeService implements IBadgeService {
 
         await this.canvasAdapter.setData(canvasData);
         await this.canvasAdapter.requestSave();
-        
-        console.log(`徽章已持久化: ${badge?.content || '(已移除)'}`);
     }
 
     async loadCanvasBadges(): Promise<void> {
@@ -139,7 +126,6 @@ export class BadgeService implements IBadgeService {
                 }
             });
             
-            console.log("已加载所有Canvas徽章");
         } catch (error) {
             console.error("加载 Canvas 徽章时出错:", error);
         }

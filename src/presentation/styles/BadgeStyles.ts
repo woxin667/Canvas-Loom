@@ -98,7 +98,6 @@ export class BadgeStyleManager {
         `;
         
         document.head.appendChild(this.styleEl);
-        console.log("Canvas badge styles injected with persistence support");
     }
 
     ensureStylesExist(): void {

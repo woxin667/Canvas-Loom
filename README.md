@@ -39,6 +39,6 @@
 
 ## 致谢
 
-本插件是基于 **joshuakto** 的原创插件 [obsidian-cardify](https://github.com/joshuakto/obsidian-cardify) 重构和扩展后的版本。所有基础工作均归功于他。
+本插件是基于 **joshuakto** 的原创插件 [obsidian-cardify](https://github.com/joshuakto/obsidian-cardify) 重构和扩展后的版本。
 
 此版本在原插件基础上进行了重构，移除了基于文件的卡片生成功能，同时扩展了 Obsidian Canvas 的功能，增加了卡片拆分、内容复制、徽章功能和属性管理功能。

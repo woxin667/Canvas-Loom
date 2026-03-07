@@ -36,7 +36,6 @@ export default class Cardify extends Plugin {
     private badgeStyleManager: BadgeStyleManager;
 
     async onload() {
-        console.log("Loading Canvas Card Actions plugin with new architecture");
 
         await this.initializeServices();
         this.registerSettingTab();
@@ -94,18 +93,11 @@ export default class Cardify extends Plugin {
         // 多选节点右键菜单
         // @ts-ignore
         this.registerEvent(this.app.workspace.on("canvas:selection-menu", (menu: any, canvas: any) => {
-            console.log("Canvas selection menu event triggered");
-            
             const selection = canvas.selection;
             
             if (!selection || selection.size === 0) {
-                console.log("No nodes selected");
                 return;
             }
-            
-            const selectionArray = Array.from(selection);
-            console.log("Selection array:", selectionArray);
-            console.log("Number of selected nodes:", selectionArray.length);
             
             // 使用canvas设置服务
             this.setupCanvasServices(canvas);
@@ -175,30 +167,17 @@ export default class Cardify extends Plugin {
     }
 
     private addSelectionMenuCommands(menu: any, selection: any): void {
-        console.log("addSelectionMenuCommands called");
-        console.log("Selection received:", selection);
-        console.log("Selection size:", selection?.size || 0);
-        console.log("contentService exists:", !!this.contentService);
-        
         if (!this.contentService) {
-            console.error("Content service not initialized");
             return;
         }
         
         // 将选择集合转换为数组
         const selectionArray = Array.from(selection);
-        console.log("Adding selection menu commands for", selectionArray.length, "items");
         
         // 验证我们有实际的节点
         if (selectionArray.length === 0) {
-            console.log("No nodes to add commands for");
             return;
         }
-        
-        // 记录第一个节点以验证其结构
-        console.log("First selected node:", selectionArray[0]);
-        console.log("First node type:", (selectionArray[0] as any)?.type);
-        console.log("First node has text:", !!(selectionArray[0] as any)?.text);
         
         // 添加按位置复制命令
         const copyByPositionCommand = new CopyByPositionCommand(
@@ -207,15 +186,11 @@ export default class Cardify extends Plugin {
             this.settings.sortPriority
         );
         
-        console.log("Copy by position command canExecute:", copyByPositionCommand.canExecute());
-        
         this.commandRegistry.registerCommand("copy-by-position", copyByPositionCommand);
         this.commandRegistry.addCommandToMenu(menu, "copy-by-position", "按位置复制内容", "map-pin");
         
         // 添加按徽章复制命令
         const copyByBadgeCommand = new CopyByBadgeOrderCommand(this.contentService, selectionArray);
-        
-        console.log("Copy by badge command canExecute:", copyByBadgeCommand.canExecute());
         
         this.commandRegistry.registerCommand("copy-by-badge", copyByBadgeCommand);
         this.commandRegistry.addCommandToMenu(menu, "copy-by-badge", "按徽章顺序复制内容", "sort-asc");
@@ -232,18 +207,11 @@ export default class Cardify extends Plugin {
         );
         this.commandRegistry.registerCommand("open-card-properties", propertiesCommand);
         this.commandRegistry.addCommandToMenu(
-            menu, 
-            "open-card-properties", 
+            menu,
+            "open-card-properties",
             "管理卡片属性", // 统一命名
             "settings"
         );
-        
-        // 获取文本卡片以进行尺寸操作
-        const textCards = selectionArray.filter(
-            (node: any) => node.getData && node.getData().type === "text"
-        );
-        
-        console.log("Selection menu commands added successfully");
     }
 
     registerCanvasEvents() {
