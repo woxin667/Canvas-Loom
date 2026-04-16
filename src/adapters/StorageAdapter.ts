@@ -1,17 +1,17 @@
-import CardifySettings from "../settings/ICardifySettings";
+import CanvasCardActionsSettings from "../settings/ICanvasCardActionsSettings";
 
 export interface IStorageAdapter {
-    loadSettings(): Promise<CardifySettings>;
-    saveSettings(settings: CardifySettings): Promise<void>;
+    loadSettings(): Promise<CanvasCardActionsSettings>;
+    saveSettings(settings: CanvasCardActionsSettings): Promise<void>;
 }
 
 export class StorageAdapter implements IStorageAdapter {
     constructor(
         private plugin: any,
-        private defaultSettings: CardifySettings
+        private defaultSettings: CanvasCardActionsSettings
     ) {}
 
-    async loadSettings(): Promise<CardifySettings> {
+    async loadSettings(): Promise<CanvasCardActionsSettings> {
         try {
             const data = await this.plugin.loadData();
             return Object.assign({}, this.defaultSettings, data);
@@ -21,7 +21,7 @@ export class StorageAdapter implements IStorageAdapter {
         }
     }
 
-    async saveSettings(settings: CardifySettings): Promise<void> {
+    async saveSettings(settings: CanvasCardActionsSettings): Promise<void> {
         try {
             await this.plugin.saveData(settings);
         } catch (error) {

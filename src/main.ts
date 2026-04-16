@@ -1,6 +1,6 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
-import CardifySettings from "./settings/ICardifySettings";
-import CardifySettingTab from "./settings/CardifySettingTab";
+import CanvasCardActionsSettings from "./settings/ICanvasCardActionsSettings";
+import CanvasCardActionsSettingTab from "./settings/CanvasCardActionsSettingTab";
 
 // 导入新架构的组件
 import { CanvasAdapter, ClipboardAdapter, StorageAdapter } from './adapters';
@@ -18,14 +18,14 @@ import {
 } from './presentation/commands';
 import { OpenCardPropertiesCommand, CopyCardDimensionsCommand } from "./presentation/commands/PropertiesCommands";
 
-const DEFAULT_SETTINGS: CardifySettings = {
+const DEFAULT_SETTINGS: CanvasCardActionsSettings = {
     canvasCardDelimiter: '---',
     sortPriority: 'yx',
     enableBadges: true,
 }
 
-export default class Cardify extends Plugin {
-    settings: CardifySettings;
+export default class CanvasCardActionsPlugin extends Plugin {
+    settings: CanvasCardActionsSettings;
     
     // 依赖注入容器
     private clipboardAdapter: ClipboardAdapter;
@@ -62,7 +62,7 @@ export default class Cardify extends Plugin {
     }
 
     private registerSettingTab(): void {
-        this.addSettingTab(new CardifySettingTab(this.app, this));
+        this.addSettingTab(new CanvasCardActionsSettingTab(this.app, this));
     }
 
     private setupUI(): void {

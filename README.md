@@ -42,6 +42,4 @@
 
 ## 🤝 致谢
 
-本插件是在 **joshuakto** 的开源项目 [obsidian-cardify](https://github.com/joshuakto/obsidian-cardify) 基础上重构与拓展的版本。
-
-相较于原版，本插件移除了通过文件生成卡片相关的功能，将核心聚焦在 Canvas 原生操作体验的提升上，增加了卡片快速拆分、智能内容合并复制、可视化状态徽章管理以及批量尺寸编排功能。
+早期开发参考了 **joshuakto** 的开源项目 [obsidian-cardify](https://github.com/joshuakto/obsidian-cardify)。
