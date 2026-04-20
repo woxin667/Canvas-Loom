@@ -27,6 +27,11 @@ jobs:
           npm install
           npm run build
 
+      - name: Create release archive
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          zip -j "obsidian-canvas-card-actions-${tag}.zip" main.js manifest.json styles.css
+
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,4 +41,5 @@ jobs:
           gh release create "$tag" \
             --title="$tag" \
             --draft \
+            "obsidian-canvas-card-actions-${tag}.zip" \
             main.js manifest.json styles.css
