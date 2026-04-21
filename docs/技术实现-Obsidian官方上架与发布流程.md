@@ -13,7 +13,7 @@
 
 ### 插件标识
 
-- 插件 `id`：`obsidian-canvas-loom`
+- 插件 `id`：`canvas-loom`
 - 插件名称：`Canvas Loom`
 - 仓库地址：`https://github.com/woxin667/Canvas-Loom`
 - 默认分支：`main`
@@ -80,7 +80,7 @@ npm run build
 1. 安装依赖
 2. 执行 `npm run build`
 3. 收集 `manifest.json`、`main.js`、`styles.css`
-4. 打包为 `obsidian-canvas-loom-版本号.zip`
+4. 打包为 `canvas-loom-版本号.zip`
 5. 创建对应的 GitHub Release 并上传以上文件
 
 ## 提审前检查清单
@@ -115,10 +115,10 @@ npm run build
 
 ```json
 {
-  "id": "obsidian-canvas-loom",
+  "id": "canvas-loom",
   "name": "Canvas Loom",
   "author": "沃辛",
-  "description": "为 Obsidian Canvas 添加卡片拼合、拆分、内容复制和添加标记的功能",
+  "description": "为 Canvas 添加卡片拼合、拆分、内容复制和添加标记的功能.",
   "repo": "woxin667/Canvas-Loom"
 }
 ```
@@ -142,3 +142,4 @@ npm run build
 - 如果功能范围、数据读写范围或外部依赖发生变化，优先更新 README 中的权限与隐私说明
 - 如果发布流程发生变化，优先更新本文件和 `.github/workflows/release.yml`
 - 每次对发布或提审流程有改动后，都应检查 `docs/README.md` 的索引是否仍然正确
+

@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-canvas-loom",
+	"name": "canvas-loom",
 	"version": "1.4.1",
-	"description": "为 Obsidian Canvas 添加卡片拼合、拆分、内容复制和添加标记的功能",
+	"description": "为 Canvas 添加卡片拼合、拆分、内容复制和添加标记的功能.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
@@ -27,3 +27,4 @@
 		"typescript": "4.7.4"
 	}
 }
+

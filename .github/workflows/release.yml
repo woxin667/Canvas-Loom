@@ -39,7 +39,7 @@ jobs:
             cp styles.css release/
           fi
           cd release
-          zip -r "../obsidian-canvas-loom-${{ github.ref_name }}.zip" .
+          zip -r "../canvas-loom-${{ github.ref_name }}.zip" .
 
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
@@ -49,4 +49,5 @@ jobs:
             manifest.json
             main.js
             styles.css
-            obsidian-canvas-loom-${{ github.ref_name }}.zip
+            canvas-loom-${{ github.ref_name }}.zip
+

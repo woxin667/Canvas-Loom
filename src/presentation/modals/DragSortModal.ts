@@ -156,7 +156,7 @@ export class DragSortModal extends Modal {
             preview.setText(item.previewText);
             preview.setAttribute("title", item.text);
 
-            // 徽章
+            // 标记
             if (item.hasBadge && item.badgeContent) {
                 const badge = row.createDiv({ cls: "drag-sort-badge" });
                 badge.setText(item.badgeContent);
@@ -408,3 +408,4 @@ export class DragSortModal extends Modal {
         ModalStyleManager.removeSharedStyles();
     }
 }
+

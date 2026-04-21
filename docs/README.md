@@ -18,5 +18,6 @@
 历史资料已经合并到归档目录，避免继续分散在 `docs/` 根目录：
 - [archive/README.md](./archive/README.md)：历史归档索引
 - [archive/版本与重构演进.md](./archive/版本与重构演进.md)
-- [archive/徽章功能设计归档.md](./archive/徽章功能设计归档.md)
+- [archive/标记功能设计归档.md](./archive/标记功能设计归档.md)
 - [archive/交互逻辑优化方案.md](./archive/交互逻辑优化方案.md)
+

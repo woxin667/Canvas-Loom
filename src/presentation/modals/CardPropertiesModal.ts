@@ -154,7 +154,7 @@ export class CardPropertiesModal extends Modal {
       // 位置
       row.createEl("td", { text: `${info.x},${info.y}`, cls: "col-position" });
       
-      // 徽章
+      // 标记
       const badgeCell = row.createEl("td", { cls: "col-badge" });
       if (info.hasBadge) {
         badgeCell.createEl("span", { 
@@ -762,3 +762,4 @@ export class CardPropertiesModal extends Modal {
     contentEl.empty();
   }
 }
+
