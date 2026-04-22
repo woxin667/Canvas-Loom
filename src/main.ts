@@ -1,14 +1,16 @@
-import { Plugin, TFile } from 'obsidian';
+import { Menu, Plugin, TFile, View, WorkspaceLeaf } from 'obsidian';
 import CanvasLoomSettings from "./settings/ICanvasLoomSettings";
 import CanvasLoomSettingTab from "./settings/CanvasLoomSettingTab";
 
 import { CanvasAdapter, ClipboardAdapter, StorageAdapter, VaultAdapter } from './adapters';
-import { CardService, BadgeService, ContentService, MergeService } from './services';
+import { CardService, BadgeService, ContentService, ColorGroupService, MergeService } from './services';
 import {
     CommandRegistry,
     CopySingleCardCommand,
     OpenSplitCardModalCommand,
     OpenBadgeModalCommand,
+    SelectSameColorCardsCommand,
+    OpenSameColorGroupWorkbenchCommand,
     MergeToCanvasCardCommand,
     MergeToSidebarPreviewCommand,
     MergeToMarkdownCommand,
@@ -22,6 +24,7 @@ import { BadgeModal } from './presentation/modals';
 import { BadgeStyleManager } from './presentation/styles';
 import { MergeWorkbenchView, MERGE_PREVIEW_VIEW_TYPE } from './presentation/views';
 import { OpenCardPropertiesCommand, CopyCardDimensionsCommand } from "./presentation/commands/PropertiesCommands";
+import type { Canvas, CanvasNode } from "./types/canvas";
 
 const DEFAULT_SETTINGS: CanvasLoomSettings = {
     canvasCardDelimiter: '---',
@@ -38,6 +41,7 @@ export default class CanvasLoomPlugin extends Plugin {
     private cardService: CardService;
     private badgeService: BadgeService;
     private contentService: ContentService;
+    private colorGroupService: ColorGroupService;
     private mergeService: MergeService;
     private commandRegistry: CommandRegistry;
     private badgeStyleManager: BadgeStyleManager;
@@ -88,7 +92,7 @@ export default class CanvasLoomPlugin extends Plugin {
     private initializeBadges(): void {
         this.app.workspace.onLayoutReady(() => {
             if (this.settings.enableBadges) {
-                this.loadAllCanvasBadges();
+                void this.loadAllCanvasBadges();
             } else {
                 this.clearAllCanvasBadgeDom();
             }
@@ -97,13 +101,13 @@ export default class CanvasLoomPlugin extends Plugin {
 
     registerCanvasMenus() {
         // @ts-ignore
-        this.registerEvent(this.app.workspace.on("canvas:node-menu", (menu: any, node: any) => {
+        this.registerEvent(this.app.workspace.on("canvas:node-menu", (menu: Menu, node: CanvasNode) => {
             this.setupCanvasServices(node.canvas);
             this.addNodeMenuCommands(menu, node);
         }));
 
         // @ts-ignore
-        this.registerEvent(this.app.workspace.on("canvas:selection-menu", (menu: any, canvas: any) => {
+        this.registerEvent(this.app.workspace.on("canvas:selection-menu", (menu: Menu, canvas: Canvas) => {
             const selection = canvas.selection;
             if (!selection || selection.size === 0) {
                 return;
@@ -114,7 +118,7 @@ export default class CanvasLoomPlugin extends Plugin {
         }));
     }
 
-    private setupCanvasServices(canvas: any): void {
+    private setupCanvasServices(canvas?: Canvas): void {
         if (!canvas) {
             return;
         }
@@ -123,10 +127,11 @@ export default class CanvasLoomPlugin extends Plugin {
         this.cardService = new CardService(canvasAdapter);
         this.badgeService = new BadgeService(canvasAdapter, () => this.settings.enableBadges);
         this.contentService = new ContentService(canvasAdapter, this.clipboardAdapter, this.badgeService);
+        this.colorGroupService = new ColorGroupService(canvasAdapter);
         this.mergeService = new MergeService(this.app, canvasAdapter, this.contentService, this.vaultAdapter);
     }
 
-    private addNodeMenuCommands(menu: any, node: any): void {
+    private addNodeMenuCommands(menu: Menu, node: CanvasNode): void {
         if (this.badgeService && this.badgeService.isValidBadgeNode(node)) {
             const badgeCommand = new OpenBadgeModalCommand(
                 async (targetNode) => {
@@ -157,6 +162,15 @@ export default class CanvasLoomPlugin extends Plugin {
             this.commandRegistry.addCommandToMenu(menu, 'copy-single-card', '复制卡片内容', 'copy');
         }
 
+        if (node.getData && node.getData().type === "text" && this.colorGroupService) {
+            const selectSameColorCommand = new SelectSameColorCardsCommand(
+                this.colorGroupService,
+                this.resolveNodeMenuSelection(node)
+            );
+            this.commandRegistry.registerCommand("select-same-color-cards", selectSameColorCommand);
+            this.commandRegistry.addCommandToMenu(menu, "select-same-color-cards", "选中同色卡片", "palette");
+        }
+
         if (node.getData && node.getData().type === "text") {
             menu.addSeparator();
 
@@ -172,7 +186,7 @@ export default class CanvasLoomPlugin extends Plugin {
         }
     }
 
-    private addSelectionMenuCommands(menu: any, selection: any, canvasFile: TFile | null): void {
+    private addSelectionMenuCommands(menu: Menu, selection: Set<CanvasNode>, canvasFile: TFile | null): void {
         if (!this.contentService || !this.mergeService) {
             return;
         }
@@ -180,6 +194,15 @@ export default class CanvasLoomPlugin extends Plugin {
         const selectionArray = Array.from(selection);
         if (selectionArray.length === 0) {
             return;
+        }
+
+        if (this.colorGroupService?.hasTextCardSelection(selectionArray)) {
+            const selectSameColorCommand = new SelectSameColorCardsCommand(
+                this.colorGroupService,
+                selectionArray
+            );
+            this.commandRegistry.registerCommand("select-same-color-cards", selectSameColorCommand);
+            this.commandRegistry.addCommandToMenu(menu, "select-same-color-cards", "选中同色卡片", "palette");
         }
 
         const quickCopyCommand = new QuickCopyCommand(this.contentService, selectionArray, this.settings);
@@ -211,12 +234,12 @@ export default class CanvasLoomPlugin extends Plugin {
         this.commandRegistry.addCommandToMenu(menu, "open-card-properties", "管理卡片属性", "settings");
     }
 
-    private resolveCanvasFileForCanvas(canvas: any): TFile | null {
-        const leaf = this.app.workspace.getLeavesOfType("canvas").find((workspaceLeaf: any) => {
+    private resolveCanvasFileForCanvas(canvas: Canvas): TFile | null {
+        const leaf = this.app.workspace.getLeavesOfType("canvas").find((workspaceLeaf: WorkspaceLeaf) => {
             return workspaceLeaf.view?.canvas === canvas;
         });
 
-        const file = (leaf?.view as any)?.file || this.app.workspace.getActiveFile();
+        const file = leaf?.view?.file || this.app.workspace.getActiveFile();
         return file instanceof TFile && file.extension === "canvas" ? file : null;
     }
 
@@ -224,8 +247,8 @@ export default class CanvasLoomPlugin extends Plugin {
         this.registerEvent(
             this.app.workspace.on("file-open", (file: TFile) => {
                 if (this.settings.enableBadges && file && file.extension === "canvas") {
-                    setTimeout(() => {
-                        this.loadCanvasBadges(file);
+                    activeWindow.setTimeout(() => {
+                        void this.loadCanvasBadges(file);
                     }, 100);
                 }
             })
@@ -250,7 +273,7 @@ export default class CanvasLoomPlugin extends Plugin {
         const leaves = this.app.workspace.getLeavesOfType("canvas");
 
         for (const leaf of leaves) {
-            const view = leaf.view as any;
+            const view = leaf.view;
             if (view.file?.path === file.path) {
                 const canvas = view.canvas;
                 if (!canvas) {
@@ -268,26 +291,26 @@ export default class CanvasLoomPlugin extends Plugin {
         }
     }
 
-    loadAllCanvasBadges() {
+    async loadAllCanvasBadges(): Promise<void> {
         if (!this.settings.enableBadges) {
             return;
         }
 
         const canvasLeaves = this.app.workspace.getLeavesOfType("canvas");
 
-        canvasLeaves.forEach((leaf) => {
-            const view = leaf.view as any;
+        for (const leaf of canvasLeaves) {
+            const view = leaf.view;
             if (view.file) {
-                this.loadCanvasBadges(view.file);
+                await this.loadCanvasBadges(view.file);
             }
-        });
+        }
     }
 
     clearAllCanvasBadgeDom() {
         const canvasLeaves = this.app.workspace.getLeavesOfType("canvas");
 
         canvasLeaves.forEach((leaf) => {
-            const view = leaf.view as any;
+            const view = leaf.view;
             const canvas = view?.canvas;
             if (!canvas) {
                 return;
@@ -317,7 +340,7 @@ export default class CanvasLoomPlugin extends Plugin {
 
         if (enabled) {
             this.badgeStyleManager.injectStyles();
-            this.loadAllCanvasBadges();
+            void this.loadAllCanvasBadges();
             return;
         }
 
@@ -394,6 +417,18 @@ export default class CanvasLoomPlugin extends Plugin {
         );
 
         this.registerCanvasSelectionCommand(
+            'preview-same-color-card-group',
+            '预览同色卡片分组',
+            ({ selection, file }) => new OpenSameColorGroupWorkbenchCommand(
+                this.colorGroupService,
+                this.mergeService,
+                selection,
+                file,
+                this.settings
+            )
+        );
+
+        this.registerCanvasSelectionCommand(
             'merge-selected-cards-to-canvas-card',
             '合并选区为新卡片',
             ({ selection }) => new MergeToCanvasCardCommand(this.mergeService, selection, this.settings)
@@ -421,7 +456,7 @@ export default class CanvasLoomPlugin extends Plugin {
     private registerCanvasSelectionCommand(
         id: string,
         name: string,
-        factory: (context: { selection: any[]; file: TFile | null }) => ICommand
+        factory: (context: { selection: CanvasNode[]; file: TFile | null }) => ICommand
     ): void {
         this.addCommand({
             id,
@@ -451,9 +486,8 @@ export default class CanvasLoomPlugin extends Plugin {
         });
     }
 
-    private getActiveCanvasSelectionContext(): { canvas: any; selection: any[]; file: TFile | null } | null {
-        const activeLeaf = this.app.workspace.activeLeaf;
-        const activeView = activeLeaf?.view as any;
+    private getActiveCanvasSelectionContext(): { canvas: Canvas; selection: CanvasNode[]; file: TFile | null } | null {
+        const activeView = this.app.workspace.getActiveViewOfType(View);
 
         if (!activeView || activeView.getViewType?.() !== 'canvas' || !activeView.canvas) {
             return null;
@@ -470,5 +504,14 @@ export default class CanvasLoomPlugin extends Plugin {
             selection,
             file
         };
+    }
+
+    private resolveNodeMenuSelection(node: CanvasNode): CanvasNode[] {
+        const selection = Array.from(node.canvas?.selection || []);
+        if (selection.length === 0) {
+            return [node];
+        }
+
+        return selection.some((selectedNode) => selectedNode.id === node.id) ? selection : [node];
     }
 }

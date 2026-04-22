@@ -1,4 +1,9 @@
+import type { Plugin } from "obsidian";
 import CanvasLoomSettings from "../settings/ICanvasLoomSettings";
+
+type LegacyStorageData = Partial<CanvasLoomSettings> & {
+    mergeDefaultOrder?: CanvasLoomSettings["defaultSortMode"];
+};
 
 export interface IStorageAdapter {
     loadSettings(): Promise<CanvasLoomSettings>;
@@ -7,14 +12,22 @@ export interface IStorageAdapter {
 
 export class StorageAdapter implements IStorageAdapter {
     constructor(
-        private plugin: any,
+        private plugin: Pick<Plugin, "loadData" | "saveData">,
         private defaultSettings: CanvasLoomSettings
     ) {}
 
+    private normalizeLoadedSettings(data: unknown): LegacyStorageData {
+        if (!data || typeof data !== "object") {
+            return {};
+        }
+
+        return { ...(data as Record<string, unknown>) } as LegacyStorageData;
+    }
+
     async loadSettings(): Promise<CanvasLoomSettings> {
         try {
-            const data = await this.plugin.loadData();
-            const normalizedData = { ...(data || {}) };
+            const data: unknown = await this.plugin.loadData();
+            const normalizedData = this.normalizeLoadedSettings(data);
 
             if (!normalizedData.defaultSortMode && normalizedData.mergeDefaultOrder) {
                 normalizedData.defaultSortMode = normalizedData.mergeDefaultOrder;

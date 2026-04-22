@@ -1,3 +1,5 @@
+import type { CanvasNodeData } from "../../types/canvas";
+
 export interface Position {
     x: number;
     y: number;
@@ -27,7 +29,7 @@ export class CardData {
         public readonly badge?: string
     ) {}
 
-    static fromCanvasNodeData(nodeData: any): CardData {
+    static fromCanvasNodeData(nodeData: CanvasNodeData): CardData {
         return new CardData(
             nodeData.id,
             nodeData.text || '',

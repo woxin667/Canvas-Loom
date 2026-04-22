@@ -1,12 +1,14 @@
+import type { App } from "obsidian";
 import { ICommand } from "./ICommand";
 import { IContentService } from "../../services/ContentService";
 import { SortPriority } from "../../domain/strategies";
 import { DragSortModal } from "../modals/DragSortModal";
+import type { CanvasNode } from "../../types/canvas";
 
 export class CopySingleCardCommand implements ICommand {
     constructor(
         private contentService: IContentService,
-        private node: any
+        private node: CanvasNode
     ) {}
 
     async execute(): Promise<void> {
@@ -25,7 +27,7 @@ export class CopySingleCardCommand implements ICommand {
 export class CopyByPositionCommand implements ICommand {
     constructor(
         private contentService: IContentService,
-        private selection: any[],
+        private selection: CanvasNode[],
         private sortPriority: SortPriority = 'yx'
     ) {}
 
@@ -45,7 +47,7 @@ export class CopyByPositionCommand implements ICommand {
 export class CopyByBadgeOrderCommand implements ICommand {
     constructor(
         private contentService: IContentService,
-        private selection: any[]
+        private selection: CanvasNode[]
     ) {}
 
     async execute(): Promise<void> {
@@ -63,12 +65,13 @@ export class CopyByBadgeOrderCommand implements ICommand {
 
 export class CopyByManualOrderCommand implements ICommand {
     constructor(
-        private app: any,
-        private selection: any[]
+        private app: App,
+        private selection: CanvasNode[]
     ) {}
 
-    async execute(): Promise<void> {
+    execute(): Promise<void> {
         new DragSortModal(this.app, this.selection).open();
+        return Promise.resolve();
     }
 
     canExecute(): boolean {

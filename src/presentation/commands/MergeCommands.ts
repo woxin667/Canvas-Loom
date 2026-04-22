@@ -1,13 +1,15 @@
+import type { App } from "obsidian";
 import { TFile } from "obsidian";
 import { ICommand } from "./ICommand";
 import { IMergeService } from "../../services/MergeService";
 import CanvasLoomSettings from "../../settings/ICanvasLoomSettings";
 import { DragSortModal } from "../modals/DragSortModal";
+import type { CanvasNode } from "../../types/canvas";
 
 export class MergeToCanvasCardCommand implements ICommand {
     constructor(
         private mergeService: IMergeService,
-        private selection: any[],
+        private selection: CanvasNode[],
         private settings: CanvasLoomSettings
     ) {}
 
@@ -31,7 +33,7 @@ export class MergeToCanvasCardCommand implements ICommand {
 export class MergeToSidebarPreviewCommand implements ICommand {
     constructor(
         private mergeService: IMergeService,
-        private selection: any[],
+        private selection: CanvasNode[],
         private canvasFile: TFile | null,
         private settings: CanvasLoomSettings
     ) {}
@@ -56,7 +58,7 @@ export class MergeToSidebarPreviewCommand implements ICommand {
 export class MergeToMarkdownCommand implements ICommand {
     constructor(
         private mergeService: IMergeService,
-        private selection: any[],
+        private selection: CanvasNode[],
         private canvasFile: TFile | null,
         private settings: CanvasLoomSettings
     ) {}
@@ -80,13 +82,13 @@ export class MergeToMarkdownCommand implements ICommand {
 
 export class ManualMergeCommand implements ICommand {
     constructor(
-        private app: any,
+        private app: App,
         private mergeService: IMergeService,
-        private selection: any[],
+        private selection: CanvasNode[],
         private canvasFile: TFile | null
     ) {}
 
-    async execute(): Promise<void> {
+    execute(): Promise<void> {
         new DragSortModal(this.app, this.selection, {
             title: "手动排序拼合",
             description: (count) => `拖拽卡片调整拼合顺序（共 ${count} 张卡片）`,
@@ -123,6 +125,7 @@ export class ManualMergeCommand implements ICommand {
                 }
             ]
         }).open();
+        return Promise.resolve();
     }
 
     canExecute(): boolean {

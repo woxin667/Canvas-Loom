@@ -1,10 +1,10 @@
-import { Modal, Notice } from "obsidian";
+import { App, Modal, Notice } from "obsidian";
 import { ClipboardAdapter } from "../../adapters/ClipboardAdapter";
-import { ModalStyleManager } from "../styles/ModalStyles";
 import { PositionSortStrategy } from "../../domain/strategies/PositionSort";
+import type { CanvasNode } from "../../types/canvas";
 
 interface DragSortCardItem {
-    node: any;
+    node: CanvasNode;
     id: string;
     text: string;
     previewText: string;
@@ -13,7 +13,7 @@ interface DragSortCardItem {
 }
 
 interface DragSortActionContext {
-    nodes: any[];
+    nodes: CanvasNode[];
     items: DragSortCardItem[];
     modal: DragSortModal;
 }
@@ -31,7 +31,7 @@ interface DragSortModalOptions {
 }
 
 export class DragSortModal extends Modal {
-    private cards: any[];
+    private cards: CanvasNode[];
     private cardItems: DragSortCardItem[] = [];
     private listContainer: HTMLElement;
     private draggedIndex: number | null = null;
@@ -39,7 +39,7 @@ export class DragSortModal extends Modal {
     private readonly descriptionBuilder: (count: number) => string;
     private readonly actions: DragSortAction[];
 
-    constructor(app: any, cards: any[], options: DragSortModalOptions = {}) {
+    constructor(app: App, cards: CanvasNode[], options: DragSortModalOptions = {}) {
         super(app);
         this.cards = cards;
         this.title = options.title || "手动排序复制";
@@ -84,7 +84,7 @@ export class DragSortModal extends Modal {
 
         // 按位置排序：从上到下，从左到右
         const sorter = new PositionSortStrategy('yx', 10);
-        this.cardItems = sorter.sort(rawItems as unknown as any[]) as unknown as DragSortCardItem[];
+        this.cardItems = sorter.sort(rawItems);
     }
 
     onOpen(): void {
@@ -121,18 +121,14 @@ export class DragSortModal extends Modal {
                 text: action.text,
                 cls: action.cls,
             });
-            actionBtn.addEventListener("click", async () => {
-                await action.onClick({
+            actionBtn.addEventListener("click", () => {
+                void action.onClick({
                     nodes: this.cardItems.map((item) => item.node),
                     items: [...this.cardItems],
                     modal: this
                 });
             });
         });
-
-        // 注入样式
-        ModalStyleManager.injectSharedStyles();
-        this.addStyles();
     }
 
     private renderList(): void {
@@ -235,177 +231,9 @@ export class DragSortModal extends Modal {
         });
     }
 
-    private addStyles(): void {
-        const style = document.createElement("style");
-        style.id = "drag-sort-modal-styles";
-
-        // 避免重复注入
-        if (document.getElementById("drag-sort-modal-styles")) {
-            document.getElementById("drag-sort-modal-styles")?.remove();
-        }
-
-        style.textContent = `
-            .drag-sort-modal {
-                padding: 0;
-            }
-
-            .drag-sort-desc {
-                color: var(--text-muted);
-                margin-bottom: 16px;
-                font-size: 13px;
-            }
-
-            .drag-sort-list {
-                background: var(--background-secondary-alt);
-                border-radius: 6px;
-                border: 1px solid var(--background-modifier-border);
-                overflow: hidden;
-                margin-bottom: 20px;
-                max-height: 400px;
-                overflow-y: auto;
-            }
-
-            .drag-sort-item {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 12px 14px;
-                border-bottom: 1px solid rgba(var(--mono-rgb-100), 0.05);
-                cursor: grab;
-                transition: background 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
-                user-select: none;
-            }
-
-            .drag-sort-item:last-child {
-                border-bottom: none;
-            }
-
-            .drag-sort-item:hover {
-                background: var(--background-modifier-hover);
-            }
-
-            .drag-sort-item.dragging {
-                opacity: 0.4;
-                background: var(--background-modifier-active-hover);
-            }
-
-            .drag-sort-item.drag-over {
-                border-top: 2px solid #7c6adb;
-                padding-top: 10px;
-                background: rgba(124, 106, 219, 0.06);
-            }
-
-            .drag-sort-handle {
-                color: var(--text-faint);
-                font-size: 16px;
-                cursor: grab;
-                flex-shrink: 0;
-                width: 18px;
-                text-align: center;
-                line-height: 1;
-                transition: color 0.15s;
-            }
-
-            .drag-sort-item:hover .drag-sort-handle {
-                color: var(--text-muted);
-            }
-
-            .drag-sort-index {
-                color: var(--text-faint);
-                font-size: 12px;
-                min-width: 20px;
-                text-align: center;
-                flex-shrink: 0;
-                font-variant-numeric: tabular-nums;
-            }
-
-            .drag-sort-preview {
-                flex: 1;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                color: var(--text-normal);
-                font-size: 13px;
-            }
-
-            .drag-sort-badge {
-                display: inline-block;
-                background: var(--background-modifier-accent);
-                color: #ff9756;
-                padding: 2px 6px;
-                border-radius: 3px;
-                font-weight: 500;
-                font-size: 12px;
-                flex-shrink: 0;
-            }
-
-            .drag-sort-footer {
-                display: flex;
-                gap: 10px;
-                flex-wrap: wrap;
-                padding-top: 16px;
-                border-top: 1px solid var(--background-modifier-border);
-            }
-
-            .drag-sort-btn {
-                flex: 1 1 140px;
-                padding: 10px 16px;
-                border: none;
-                border-radius: 6px;
-                font-weight: 500;
-                cursor: pointer;
-                transition: all 0.2s;
-                font-size: 13px;
-            }
-
-            .drag-sort-btn-primary {
-                background: #7c6adb;
-                color: var(--text-on-accent);
-            }
-
-            .drag-sort-btn-primary:hover {
-                background: #6b59d3;
-            }
-
-            .drag-sort-btn-secondary {
-                background: var(--background-secondary);
-                color: var(--text-muted);
-            }
-
-            .drag-sort-btn-secondary:hover {
-                background: var(--background-modifier-hover);
-                color: var(--text-normal);
-            }
-
-            /* 滚动条样式 */
-            .drag-sort-list::-webkit-scrollbar {
-                width: 6px;
-            }
-
-            .drag-sort-list::-webkit-scrollbar-track {
-                background: transparent;
-            }
-
-            .drag-sort-list::-webkit-scrollbar-thumb {
-                background: var(--background-modifier-border);
-                border-radius: 3px;
-            }
-
-            .drag-sort-list::-webkit-scrollbar-thumb:hover {
-                background: var(--background-modifier-border-hover);
-            }
-        `;
-
-        document.head.appendChild(style);
-    }
-
     onClose(): void {
         const { contentEl } = this;
         contentEl.empty();
-
-        // 清理样式
-        document.getElementById("drag-sort-modal-styles")?.remove();
-        ModalStyleManager.removeSharedStyles();
     }
 }
 

@@ -2,6 +2,7 @@ import { CardData, Position } from "../domain/models/Card";
 import { CanvasNodeData } from "../domain/models/CanvasData";
 import { ICanvasAdapter } from "../adapters/CanvasAdapter";
 import { Notice } from "obsidian";
+import type { CanvasNode } from "../types/canvas";
 
 export interface HeadingSplitOption {
     level: number;
@@ -9,16 +10,16 @@ export interface HeadingSplitOption {
 }
 
 export interface ICardService {
-    splitCard(node: any, delimiter: string): Promise<void>;
-    splitCardByHeadingLevel(node: any, level: number): Promise<void>;
-    getAvailableHeadingSplitOptions(node: any): HeadingSplitOption[];
+    splitCard(node: CanvasNode, delimiter: string): Promise<void>;
+    splitCardByHeadingLevel(node: CanvasNode, level: number): Promise<void>;
+    getAvailableHeadingSplitOptions(node: CanvasNode): HeadingSplitOption[];
     countDelimitedParts(text: string, delimiter: string): number;
     createCardsFromContent(contents: string[], basePosition: Position): CanvasNodeData[];
     generateUniqueId(): string;
     calculateNewCardPosition(baseCard: CardData, index: number, cardSpacing?: number): Position;
-    unifyCardSizes(nodes: any[], targetSize: 'min' | 'max' | { width: number, height: number }): Promise<void>;
-    unifyCardWidth(nodes: any[], targetWidth: number): Promise<void>;
-    unifyCardHeight(nodes: any[], targetHeight: number): Promise<void>;
+    unifyCardSizes(nodes: CanvasNode[], targetSize: 'min' | 'max' | { width: number, height: number }): Promise<void>;
+    unifyCardWidth(nodes: CanvasNode[], targetWidth: number): Promise<void>;
+    unifyCardHeight(nodes: CanvasNode[], targetHeight: number): Promise<void>;
 }
 
 export class CardService implements ICardService {
@@ -29,7 +30,7 @@ export class CardService implements ICardService {
         private readonly defaultCardHeight: number = 400
     ) {}
 
-    async splitCard(node: any, delimiter: string): Promise<void> {
+    async splitCard(node: CanvasNode, delimiter: string): Promise<void> {
         const nodeData = node.getData();
         const text = nodeData.text;
 
@@ -47,7 +48,7 @@ export class CardService implements ICardService {
         await this.applySplit(nodeData, parts, `卡片已拆分为 ${parts.length} 张卡片`);
     }
 
-    async splitCardByHeadingLevel(node: any, level: number): Promise<void> {
+    async splitCardByHeadingLevel(node: CanvasNode, level: number): Promise<void> {
         const nodeData = node.getData();
         const text = nodeData.text;
 
@@ -65,7 +66,7 @@ export class CardService implements ICardService {
         await this.applySplit(nodeData, parts, `卡片已按 ${level} 级标题拆分为 ${parts.length} 张卡片`);
     }
 
-    getAvailableHeadingSplitOptions(node: any): HeadingSplitOption[] {
+    getAvailableHeadingSplitOptions(node: CanvasNode): HeadingSplitOption[] {
         const text = node?.getData?.()?.text;
         if (!text || typeof text !== "string") {
             return [];
@@ -86,7 +87,7 @@ export class CardService implements ICardService {
         return this.getDelimitedParts(text, delimiter).length;
     }
 
-    private async applySplit(nodeData: any, parts: string[], successMessage: string): Promise<void> {
+    private async applySplit(nodeData: CanvasNodeData, parts: string[], successMessage: string): Promise<void> {
         try {
             // 更新原始卡片
             const updatedNodeData = { ...nodeData, text: parts[0] };
@@ -210,7 +211,7 @@ export class CardService implements ICardService {
     }
 
     generateUniqueId(): string {
-        return `${Math.random().toString(36).substr(2, 9)}`;
+        return `${Math.random().toString(36).slice(2, 11)}`;
     }
 
     calculateNewCardPosition(baseCard: CardData, index: number, cardSpacing?: number): Position {
@@ -231,7 +232,7 @@ export class CardService implements ICardService {
      * 分析选中卡片的尺寸，返回统一选项
      * 重点：只返回用户真正需要的信息
      */
-    private analyzeCardSizes(nodes: any[]): {
+    private analyzeCardSizes(nodes: CanvasNode[]): {
         minSize: { width: number, height: number },
         maxSize: { width: number, height: number },
         hasVariedSizes: boolean,
@@ -261,7 +262,7 @@ export class CardService implements ICardService {
         };
     }
 
-    private async applyDimensionChange(nodes: any[], targetWidth?: number, targetHeight?: number, successMessage?: string): Promise<void> {
+    private async applyDimensionChange(nodes: CanvasNode[], targetWidth?: number, targetHeight?: number, successMessage?: string): Promise<void> {
         const textNodes = nodes.filter(node => node.getData().type === "text");
         
         if (textNodes.length === 0) {
@@ -297,12 +298,13 @@ export class CardService implements ICardService {
         } catch (error) {
             console.error("尺寸调整操作失败:", error);
             
-            if (error.message.includes("Canvas")) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (message.includes("Canvas")) {
                 throw new Error("画布操作失败，请刷新页面后重试");
-            } else if (error.message.includes("save")) {
+            } else if (message.includes("save")) {
                 throw new Error("保存失败，请检查文件权限");
             } else {
-                throw new Error(`操作失败：${error.message}`);
+                throw new Error(`操作失败：${message}`);
             }
         }
     }
@@ -310,7 +312,7 @@ export class CardService implements ICardService {
     /**
      * 统一卡片尺寸 - 核心功能，简单高效
      */
-    async unifyCardSizes(nodes: any[], targetSize: 'min' | 'max' | { width: number, height: number }): Promise<void> {
+    async unifyCardSizes(nodes: CanvasNode[], targetSize: 'min' | 'max' | { width: number, height: number }): Promise<void> {
 
         // 分析当前尺寸
         const analysis = this.analyzeCardSizes(nodes);
@@ -336,7 +338,7 @@ export class CardService implements ICardService {
     /**
      * 只统一卡片宽度
      */
-    async unifyCardWidth(nodes: any[], targetWidth: number): Promise<void> {
+    async unifyCardWidth(nodes: CanvasNode[], targetWidth: number): Promise<void> {
         const count = nodes.filter(n => n.getData().type === "text").length;
         const msg = `已统一 ${count} 个卡片宽度为 ${targetWidth}px，高度保持不变`;
         await this.applyDimensionChange(nodes, targetWidth, undefined, msg);
@@ -345,7 +347,7 @@ export class CardService implements ICardService {
     /**
      * 只统一卡片高度
      */
-    async unifyCardHeight(nodes: any[], targetHeight: number): Promise<void> {
+    async unifyCardHeight(nodes: CanvasNode[], targetHeight: number): Promise<void> {
         const count = nodes.filter(n => n.getData().type === "text").length;
         const msg = `已统一 ${count} 个卡片高度为 ${targetHeight}px，宽度保持不变`;
         await this.applyDimensionChange(nodes, undefined, targetHeight, msg);

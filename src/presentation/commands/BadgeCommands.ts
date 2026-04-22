@@ -1,9 +1,10 @@
+import type { CanvasNode } from "../../types/canvas";
 import { ICommand } from "./ICommand";
 
 export class OpenBadgeModalCommand implements ICommand {
     constructor(
-        private openModal: (node: any) => Promise<void>,
-        private node: any
+        private openModal: (node: CanvasNode) => Promise<void>,
+        private node: CanvasNode
     ) {}
 
     async execute(): Promise<void> {

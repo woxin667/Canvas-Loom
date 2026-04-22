@@ -5,6 +5,7 @@ import type { CardSnapshot, WorkbenchState } from "../types/WorkbenchState";
 export interface CreateWorkbenchStateOptions {
     canvasFilePath: string | null;
     canvasFileBasename: string;
+    scopeLabel?: string;
     selectionSnapshot: CardSnapshot[];
     defaultSortMode: MergeOrder;
     previewExpanded?: boolean;
@@ -17,6 +18,7 @@ export class PreviewWorkbenchService {
         return {
             canvasFilePath: options.canvasFilePath,
             canvasFileBasename: options.canvasFileBasename,
+            scopeLabel: options.scopeLabel || "当前选区",
             selectionSnapshot: [...options.selectionSnapshot],
             sortMode: options.defaultSortMode,
             manualOrderIds: [],
@@ -81,7 +83,7 @@ export class PreviewWorkbenchService {
 
         if (state.sortMode === 'badge') {
             const sorter = new BadgeSortStrategy(sortPriority);
-            return sorter.sort(cards as any) as CardSnapshot[];
+            return sorter.sort(cards);
         }
 
         if (state.sortMode === 'manual') {
@@ -89,7 +91,7 @@ export class PreviewWorkbenchService {
         }
 
         const sorter = new PositionSortStrategy(sortPriority);
-        return sorter.sort(cards as any) as CardSnapshot[];
+        return sorter.sort(cards);
     }
 
     buildPreviewContent(state: WorkbenchState, sortPriority: SortPriority): string {

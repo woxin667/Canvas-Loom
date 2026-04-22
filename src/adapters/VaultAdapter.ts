@@ -1,3 +1,4 @@
+import type { App } from "obsidian";
 import { normalizePath, TFile } from "obsidian";
 
 export interface IVaultAdapter {
@@ -5,7 +6,7 @@ export interface IVaultAdapter {
 }
 
 export class VaultAdapter implements IVaultAdapter {
-    constructor(private app: any) {}
+    constructor(private app: App) {}
 
     async createMergedDocument(content: string, canvasFile: TFile, baseName: string): Promise<TFile> {
         const fileName = `${this.sanitizeFileName(baseName)}-${this.formatTimestamp(new Date())}.md`;

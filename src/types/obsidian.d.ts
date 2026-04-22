@@ -1,15 +1,17 @@
-import { View } from 'obsidian';
-import { Canvas } from 'obsidian/canvas';
+import { TFile } from "obsidian";
+import type { Canvas as CanvasRuntime } from "./canvas";
 
-declare module 'obsidian' {
+declare module "obsidian" {
     interface View {
-        canvas?: Canvas;
+        canvas?: CanvasRuntime;
+        file?: TFile | null;
         getViewType(): string;
     }
-    
+
     interface WorkspaceLeaf {
         view: View & {
-            canvas?: Canvas;
+            canvas?: CanvasRuntime;
+            file?: TFile | null;
         };
     }
 }

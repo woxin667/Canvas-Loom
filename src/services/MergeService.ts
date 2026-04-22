@@ -1,4 +1,4 @@
-import { Notice, TFile, WorkspaceLeaf } from "obsidian";
+import { App, Notice, TFile, WorkspaceLeaf } from "obsidian";
 import { CanvasAdapter, ICanvasAdapter } from "../adapters/CanvasAdapter";
 import { IVaultAdapter } from "../adapters/VaultAdapter";
 import { IContentService, MergeOrder } from "./ContentService";
@@ -6,6 +6,7 @@ import { SortPriority } from "../domain/strategies";
 import { MergeWorkbenchView, MERGE_PREVIEW_VIEW_TYPE } from "../presentation/views";
 import { PreviewWorkbenchService } from "./PreviewWorkbenchService";
 import type { CardSnapshot, WorkbenchState } from "../types/WorkbenchState";
+import type { CanvasNode, CanvasNodeData } from "../types/canvas";
 
 export interface MergeExecutionOptions {
     order?: MergeOrder;
@@ -13,11 +14,19 @@ export interface MergeExecutionOptions {
     manualOrderIds?: string[];
 }
 
+export interface OpenWorkbenchOptions {
+    order?: MergeOrder;
+    sortPriority?: SortPriority;
+    previewExpanded?: boolean;
+    scopeLabel?: string;
+}
+
 export interface IMergeService {
-    mergeToCanvasCard(selection: any[], options?: MergeExecutionOptions): Promise<boolean>;
-    mergeToSidebar(selection: any[], canvasFile: TFile | null, options?: MergeExecutionOptions): Promise<boolean>;
-    mergeToMarkdown(selection: any[], canvasFile: TFile | null, options?: MergeExecutionOptions): Promise<boolean>;
-    openWorkbench(selection: any[], canvasFile: TFile | null, options?: { order?: MergeOrder; sortPriority?: SortPriority; previewExpanded?: boolean }): Promise<boolean>;
+    mergeToCanvasCard(selection: CanvasNode[], options?: MergeExecutionOptions): Promise<boolean>;
+    mergeToSidebar(selection: CanvasNode[], canvasFile: TFile | null, options?: MergeExecutionOptions): Promise<boolean>;
+    mergeToMarkdown(selection: CanvasNode[], canvasFile: TFile | null, options?: MergeExecutionOptions): Promise<boolean>;
+    openWorkbench(selection: CanvasNode[], canvasFile: TFile | null, options?: OpenWorkbenchOptions): Promise<boolean>;
+    openWorkbenchFromSnapshots(snapshots: CardSnapshot[], canvasFile: TFile | null, options?: OpenWorkbenchOptions): Promise<boolean>;
     mergeSnapshotsToCanvasCard(snapshots: CardSnapshot[], canvasFilePath: string | null, options?: MergeExecutionOptions): Promise<boolean>;
     mergeSnapshotsToMarkdown(snapshots: CardSnapshot[], canvasFilePath: string | null, options?: MergeExecutionOptions): Promise<boolean>;
 }
@@ -26,13 +35,13 @@ export class MergeService implements IMergeService {
     private readonly workbenchService = new PreviewWorkbenchService();
 
     constructor(
-        private app: any,
+        private app: App,
         private canvasAdapter: ICanvasAdapter,
         private contentService: IContentService,
         private vaultAdapter: IVaultAdapter
     ) {}
 
-    async mergeToCanvasCard(selection: any[], options?: MergeExecutionOptions): Promise<boolean> {
+    async mergeToCanvasCard(selection: CanvasNode[], options?: MergeExecutionOptions): Promise<boolean> {
         const result = await this.contentService.buildMergedContent({
             selection,
             order: options?.order || 'position',
@@ -48,7 +57,7 @@ export class MergeService implements IMergeService {
 
         const snapshots = await this.contentService.createSelectionSnapshot(selection);
         const anchor = this.resolveAnchorCard(snapshots);
-        const nodeData = {
+        const nodeData: CanvasNodeData = {
             id: `${Math.random().toString(36).slice(2, 11)}`,
             type: 'text',
             text: result.content,
@@ -64,7 +73,7 @@ export class MergeService implements IMergeService {
         return true;
     }
 
-    async mergeToSidebar(selection: any[], canvasFile: TFile | null, options?: MergeExecutionOptions): Promise<boolean> {
+    async mergeToSidebar(selection: CanvasNode[], canvasFile: TFile | null, options?: MergeExecutionOptions): Promise<boolean> {
         return this.openWorkbench(selection, canvasFile, {
             order: options?.order || 'position',
             sortPriority: options?.sortPriority || 'yx',
@@ -72,7 +81,7 @@ export class MergeService implements IMergeService {
         });
     }
 
-    async mergeToMarkdown(selection: any[], canvasFile: TFile | null, options?: MergeExecutionOptions): Promise<boolean> {
+    async mergeToMarkdown(selection: CanvasNode[], canvasFile: TFile | null, options?: MergeExecutionOptions): Promise<boolean> {
         const result = await this.contentService.buildMergedContent({
             selection,
             order: options?.order || 'position',
@@ -97,8 +106,12 @@ export class MergeService implements IMergeService {
         return true;
     }
 
-    async openWorkbench(selection: any[], canvasFile: TFile | null, options?: { order?: MergeOrder; sortPriority?: SortPriority; previewExpanded?: boolean }): Promise<boolean> {
+    async openWorkbench(selection: CanvasNode[], canvasFile: TFile | null, options?: OpenWorkbenchOptions): Promise<boolean> {
         const snapshots = await this.contentService.createSelectionSnapshot(selection);
+        return this.openWorkbenchFromSnapshots(snapshots, canvasFile, options);
+    }
+
+    async openWorkbenchFromSnapshots(snapshots: CardSnapshot[], canvasFile: TFile | null, options?: OpenWorkbenchOptions): Promise<boolean> {
         if (snapshots.length === 0) {
             new Notice('没有可预览的文本卡片');
             return false;
@@ -109,6 +122,7 @@ export class MergeService implements IMergeService {
         const state = this.workbenchService.createState({
             canvasFilePath: canvasFile?.path || null,
             canvasFileBasename: canvasFile?.basename || '当前画布',
+            scopeLabel: options?.scopeLabel || '当前选区',
             selectionSnapshot: snapshots,
             defaultSortMode: options?.order || 'position',
             previewExpanded: options?.previewExpanded ?? false
@@ -142,7 +156,7 @@ export class MergeService implements IMergeService {
             }
         });
 
-        new Notice(`已打开预览工作台（${snapshots.length} 张卡片）`);
+        new Notice(`已打开预览工作台（${state.scopeLabel}，${snapshots.length} 张卡片）`);
         return true;
     }
 
@@ -161,7 +175,7 @@ export class MergeService implements IMergeService {
         }
 
         const anchor = this.resolveAnchorCard(snapshots);
-        const nodeData = {
+        const nodeData: CanvasNodeData = {
             id: `${Math.random().toString(36).slice(2, 11)}`,
             type: 'text',
             text: result.content,
@@ -265,7 +279,7 @@ export class MergeService implements IMergeService {
 
         await leaf.openFile(canvasFile, { active: false });
         const canvasLeaf = this.findCanvasLeafByPath(canvasFilePath) || leaf;
-        const view = canvasLeaf.view as any;
+        const view = canvasLeaf.view;
 
         if (!view?.canvas) {
             return null;
@@ -277,7 +291,7 @@ export class MergeService implements IMergeService {
     private findCanvasLeafByPath(canvasFilePath: string): WorkspaceLeaf | null {
         const leaves = this.app.workspace.getLeavesOfType("canvas");
         const matchedLeaf = leaves.find((leaf: WorkspaceLeaf) => {
-            const view = leaf.view as any;
+            const view = leaf.view;
             return view?.file?.path === canvasFilePath;
         });
 
@@ -295,7 +309,11 @@ export class MergeService implements IMergeService {
         }
 
         await leaf.setViewState({ type: MERGE_PREVIEW_VIEW_TYPE, active: true });
-        this.app.workspace.revealLeaf(leaf);
-        return leaf.view as MergeWorkbenchView;
+        await this.app.workspace.revealLeaf(leaf);
+        if (!(leaf.view instanceof MergeWorkbenchView)) {
+            throw new Error("预览工作台视图未成功初始化");
+        }
+
+        return leaf.view;
     }
 }

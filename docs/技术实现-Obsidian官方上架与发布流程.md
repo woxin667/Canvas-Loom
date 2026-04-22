@@ -8,6 +8,7 @@
 - 保证 `manifest.json`、`package.json`、`versions.json` 与 Git tag 版本一致
 - 保证仓库 README 能明确说明功能、权限边界和安装方式
 - 保证向 `obsidianmd/obsidian-releases` 提交时可以直接复用固定字段
+- 保证实现方式本身符合 Obsidian 官方插件规范，而不只是“功能能用”
 
 ## 当前仓库约定
 
@@ -48,6 +49,44 @@
 - `main.js` 属于构建产物，不再作为源码文件长期跟踪
 - 仓库根目录中的 `main.js` 由构建命令生成，用于打包 GitHub Release
 - 发布时必须确保 Release 中上传的是当前版本构建结果
+
+## 当前实现需要长期满足的官方规范
+
+这些约束不是临时性的提审处理，而是后续开发都应持续遵守的实现边界。
+
+### 样式加载规范
+
+- 插件样式统一放在仓库根目录 `styles.css`
+- 不在运行时通过 `document.createElement("style")` 或类似方式动态插入样式
+- 弹窗、工作台、标记显示等界面都应优先通过类名复用 `styles.css` 中的规则
+
+这样做的原因是：
+
+
+- 主题适配和维护成本更低
+- 审核工具可以直接识别插件的样式来源
+
+### DOM 构建规范
+
+- 不直接写 `innerHTML` 或 `outerHTML`
+- 优先使用 `createEl`、`createDiv`、`setText` 等方式构建界面
+- 尽量通过切换 class 来表达状态，而不是直接写大量行内样式
+
+这样做的原因是：
+- 符合官方对安全性和可维护性的要求
+- 能减少结构拼接错误和样式分散问题
+
+### TypeScript 与 API 使用规范
+
+- 避免在主链路代码中使用裸 `any`
+- Promise 必须显式 `await`、`.catch(...)` 或以 `void` 标记为刻意忽略
+- 避免继续依赖已废弃 API，例如 `activeLeaf`
+- 需要和 Canvas 交互时，优先补明确的运行时类型，而不是用宽泛类型绕过检查
+
+这样做的原因是：
+
+- 符合官方审核工具对类型质量、异步安全和 API 使用方式的规范
+- 也能降低后续 Obsidian 版本升级带来的兼容风险
 
 ## GitHub Release 流程
 
@@ -90,10 +129,12 @@ npm run build
 1. `manifest.json` 的 `id` 没有与官方插件列表冲突
 2. `manifest.json`、`package.json`、`versions.json` 的版本号一致
 3. 本地执行 `npm run build` 成功
-4. `README.md` 已包含功能说明、安装方式和权限与隐私说明
-5. 仓库中不存在明显无意义的调试日志或演示性质的提交内容
-6. GitHub Release 已包含 `manifest.json`、`main.js`、`styles.css`
-7. GitHub Release 的 tag 与当前仓库约定一致，例如 `v1.4.1`
+4. 本地执行静态检查后，不存在明显的官方规范风险项，例如运行时注入样式、裸 `any`、未处理 Promise、直接写 `innerHTML`
+   建议额外使用 `eslint-plugin-obsidianmd` 复查一次，重点关注样式加载方式、`activeWindow` 兼容、Promise 处理和废弃 API 使用
+5. `README.md` 已包含功能说明、安装方式和权限与隐私说明
+6. 仓库中不存在明显无意义的调试日志或演示性质的提交内容
+7. GitHub Release 已包含 `manifest.json`、`main.js`、`styles.css`
+8. GitHub Release 的 tag 与当前仓库约定一致，例如 `v1.4.1`
 
 ## 提交到官方插件市场
 

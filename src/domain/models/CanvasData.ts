@@ -1,30 +1,7 @@
-import { CardData } from "./Card";
+import type { CanvasData as RuntimeCanvasData, CanvasEdgeData, CanvasNodeData } from "../../types/canvas";
 
-export interface CanvasNodeData {
-    id: string;
-    type: string;
-    text?: string;
-    file?: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    color?: string;
-    badge?: string;
-}
-
-export interface CanvasEdgeData {
-    id: string;
-    fromNode: string;
-    toNode: string;
-    fromSide: string;
-    toSide: string;
-}
-
-export interface CanvasData {
-    nodes: CanvasNodeData[];
-    edges: CanvasEdgeData[];
-}
+export type CanvasData = RuntimeCanvasData;
+export type { CanvasEdgeData, CanvasNodeData };
 
 export class CanvasDataModel {
     constructor(
@@ -32,10 +9,10 @@ export class CanvasDataModel {
         public readonly edges: CanvasEdgeData[]
     ) {}
 
-    static fromRawData(data: any): CanvasDataModel {
+    static fromRawData(data: CanvasData | null | undefined): CanvasDataModel {
         return new CanvasDataModel(
-            data.nodes || [],
-            data.edges || []
+            data?.nodes || [],
+            data?.edges || []
         );
     }
 

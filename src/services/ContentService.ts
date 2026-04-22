@@ -5,11 +5,12 @@ import { BadgeData } from "../domain/models/Badge";
 import { IBadgeService } from "./BadgeService";
 import { Notice } from "obsidian";
 import type { CardSnapshot } from "../types/WorkbenchState";
+import type { CanvasNode } from "../types/canvas";
 
 export type MergeOrder = 'position' | 'badge' | 'manual';
 
 export interface BuildMergedContentOptions {
-    selection?: any[];
+    selection?: CanvasNode[];
     snapshots?: CardSnapshot[];
     order: MergeOrder;
     sortPriority?: SortPriority;
@@ -23,12 +24,12 @@ export interface MergedContentResult {
 }
 
 export interface IContentService {
-    copyContentByPosition(selection: any[], sortPriority: SortPriority): Promise<void>;
-    copyContentByBadgeOrder(selection: any[]): Promise<void>;
-    copySingleCardContent(node: any): Promise<void>;
+    copyContentByPosition(selection: CanvasNode[], sortPriority: SortPriority): Promise<void>;
+    copyContentByBadgeOrder(selection: CanvasNode[]): Promise<void>;
+    copySingleCardContent(node: CanvasNode): Promise<void>;
     copyMergedContent(options: BuildMergedContentOptions, successNotice: string): Promise<boolean>;
     buildMergedContent(options: BuildMergedContentOptions): Promise<MergedContentResult>;
-    createSelectionSnapshot(selection: any[]): Promise<CardSnapshot[]>;
+    createSelectionSnapshot(selection: CanvasNode[]): Promise<CardSnapshot[]>;
     getOrderedCards(options: BuildMergedContentOptions): Promise<CardSnapshot[]>;
     formatBadgedCardsContent(cards: Array<{text: string, badge?: string}>): string;
 }
@@ -40,7 +41,7 @@ export class ContentService implements IContentService {
         private badgeService: IBadgeService
     ) {}
 
-    async copyContentByPosition(selection: any[], sortPriority: SortPriority = 'yx'): Promise<void> {
+    async copyContentByPosition(selection: CanvasNode[], sortPriority: SortPriority = 'yx'): Promise<void> {
         try {
             await this.copyMergedContent({
                 selection,
@@ -53,7 +54,7 @@ export class ContentService implements IContentService {
         }
     }
 
-    async copyContentByBadgeOrder(selection: any[]): Promise<void> {
+    async copyContentByBadgeOrder(selection: CanvasNode[]): Promise<void> {
         try {
             await this.copyMergedContent({
                 selection,
@@ -66,7 +67,7 @@ export class ContentService implements IContentService {
         }
     }
 
-    async copySingleCardContent(node: any): Promise<void> {
+    async copySingleCardContent(node: CanvasNode): Promise<void> {
         try {
             const nodeData = node.getData();
             if (!nodeData.text) {
@@ -122,7 +123,7 @@ export class ContentService implements IContentService {
         };
     }
 
-    async createSelectionSnapshot(selection: any[]): Promise<CardSnapshot[]> {
+    async createSelectionSnapshot(selection: CanvasNode[]): Promise<CardSnapshot[]> {
         const selectedNodes = this.resolveSelection(selection);
         const snapshots: CardSnapshot[] = [];
 
@@ -143,6 +144,7 @@ export class ContentService implements IContentService {
                 y: nodeData.y ?? 0,
                 width: nodeData.width ?? 400,
                 height: nodeData.height ?? 400,
+                color: typeof nodeData.color === "string" ? nodeData.color.trim() || undefined : undefined,
                 badge: existingBadge?.content,
             });
         }
@@ -161,7 +163,7 @@ export class ContentService implements IContentService {
 
         if (options.order === 'badge') {
             const badgeSorter = new BadgeSortStrategy(options.sortPriority || 'yx');
-            return badgeSorter.sort(snapshots as any) as CardSnapshot[];
+            return badgeSorter.sort(snapshots);
         }
 
         if (options.order === 'manual') {
@@ -169,7 +171,7 @@ export class ContentService implements IContentService {
         }
 
         const positionSorter = new PositionSortStrategy(options.sortPriority || 'yx');
-        return positionSorter.sort(snapshots as any) as CardSnapshot[];
+        return positionSorter.sort(snapshots);
     }
 
     formatBadgedCardsContent(cards: Array<{text: string, badge?: string}>): string {
@@ -178,7 +180,7 @@ export class ContentService implements IContentService {
             .join('\n\n');
     }
 
-    private resolveSelection(selection: any[]): any[] {
+    private resolveSelection(selection: CanvasNode[]): CanvasNode[] {
         if (Array.isArray(selection) && selection.length > 0) {
             return selection;
         }

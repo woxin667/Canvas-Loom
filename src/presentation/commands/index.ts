@@ -3,5 +3,6 @@ export * from './CommandRegistry';
 export * from './CopyCommands';
 export * from './CreateCommands';
 export * from './BadgeCommands';
+export * from './ColorGroupCommands';
 export * from './MergeCommands';
 export * from './QuickActionCommands';

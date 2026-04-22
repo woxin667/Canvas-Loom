@@ -1,6 +1,6 @@
 import { App, Modal } from "obsidian";
 import { HeadingSplitOption, ICardService } from "../../services/CardService";
-import { ModalStyleManager } from "../styles/ModalStyles";
+import type { CanvasNode } from "../../types/canvas";
 
 interface SplitActionOption {
     title: string;
@@ -10,12 +10,12 @@ interface SplitActionOption {
 }
 
 export class SplitCardModal extends Modal {
-    private readonly node: any;
+    private readonly node: CanvasNode;
     private readonly cardService: ICardService;
     private readonly delimiter: string;
     private readonly options: SplitActionOption[] = [];
 
-    constructor(app: App, node: any, cardService: ICardService, delimiter: string) {
+    constructor(app: App, node: CanvasNode, cardService: ICardService, delimiter: string) {
         super(app);
         this.node = node;
         this.cardService = cardService;
@@ -45,7 +45,6 @@ export class SplitCardModal extends Modal {
             });
             closeButton.addEventListener("click", () => this.close());
 
-            this.addStyles();
             return;
         }
 
@@ -63,9 +62,9 @@ export class SplitCardModal extends Modal {
                 button.addClass("is-disabled");
                 button.disabled = true;
             } else {
-                button.addEventListener("click", async () => {
+                button.addEventListener("click", () => {
                     this.close();
-                    await option.onChoose();
+                    void option.onChoose();
                 });
             }
         }
@@ -77,14 +76,11 @@ export class SplitCardModal extends Modal {
         });
         cancelButton.addEventListener("click", () => this.close());
 
-        this.addStyles();
     }
 
     onClose(): void {
         const { contentEl } = this;
         contentEl.empty();
-        document.getElementById("cca-split-modal-styles")?.remove();
-        ModalStyleManager.removeSharedStyles();
     }
 
     private buildOptions(): void {
@@ -138,87 +134,4 @@ export class SplitCardModal extends Modal {
         return labels[level - 1] ?? `${level}级`;
     }
 
-    private addStyles(): void {
-        ModalStyleManager.injectSharedStyles();
-
-        const existingStyle = document.getElementById("cca-split-modal-styles");
-        if (existingStyle) {
-            existingStyle.remove();
-        }
-
-        const style = document.createElement("style");
-        style.id = "cca-split-modal-styles";
-        style.textContent = `
-            .cca-split-modal {
-                padding: 0;
-            }
-
-            .cca-split-summary {
-                color: var(--text-muted);
-                margin-bottom: 16px;
-                font-size: 13px;
-            }
-
-            .cca-split-empty {
-                background: var(--background-secondary-alt);
-                border: 1px solid var(--background-modifier-border);
-                border-radius: 8px;
-                padding: 16px;
-                margin-bottom: 20px;
-                color: var(--text-muted);
-                line-height: 1.5;
-            }
-
-            .cca-split-option-list {
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                margin-bottom: 20px;
-            }
-
-            .cca-split-option {
-                width: 100%;
-                border: 1px solid var(--background-modifier-border);
-                background: var(--background-secondary-alt);
-                border-radius: 8px;
-                padding: 14px 16px;
-                text-align: left;
-                cursor: pointer;
-                transition: border-color 0.2s, transform 0.2s, background 0.2s;
-            }
-
-            .cca-split-option:hover {
-                border-color: var(--interactive-accent);
-                background: var(--background-secondary);
-                transform: translateY(-1px);
-            }
-
-            .cca-split-option.is-disabled {
-                cursor: not-allowed;
-                opacity: 0.6;
-                transform: none;
-            }
-
-            .cca-split-option.is-disabled:hover {
-                border-color: var(--background-modifier-border);
-                background: var(--background-secondary-alt);
-                transform: none;
-            }
-
-            .cca-split-option-title {
-                font-size: 15px;
-                font-weight: 600;
-                color: var(--text-normal);
-                margin-bottom: 4px;
-            }
-
-            .cca-split-option-desc {
-                font-size: 13px;
-                line-height: 1.5;
-                color: var(--text-muted);
-            }
-        `;
-
-        document.head.appendChild(style);
-    }
 }

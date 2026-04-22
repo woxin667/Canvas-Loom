@@ -32,16 +32,18 @@ export class MergeWorkbenchView extends ItemView {
         return '卡片预览工作台';
     }
 
-    async onOpen(): Promise<void> {
-        this.ensureStyles();
+    onOpen(): Promise<void> {
         this.render();
+        return Promise.resolve();
     }
 
-    async onClose(): Promise<void> {
+    onClose(): Promise<void> {
         if (this.previewTimer) {
-            window.clearTimeout(this.previewTimer);
+            activeWindow.clearTimeout(this.previewTimer);
             this.previewTimer = null;
         }
+
+        return Promise.resolve();
     }
 
     setWorkbenchContext(context: MergeWorkbenchContext): void {
@@ -55,7 +57,7 @@ export class MergeWorkbenchView extends ItemView {
         contentEl.addClass('canvas-loom-workbench');
 
         if (!this.context) {
-        const emptyState = contentEl.createDiv({ cls: 'canvas-loom-workbench-empty' });
+            const emptyState = contentEl.createDiv({ cls: 'canvas-loom-workbench-empty' });
             emptyState.createEl('h3', { text: '暂无工作台内容' });
             emptyState.createEl('p', { text: '请先在画布中多选卡片，再执行“打开预览...”或相关命令。' });
             return;
@@ -76,11 +78,12 @@ export class MergeWorkbenchView extends ItemView {
         const modeGroup = toolbar.createDiv({ cls: 'canvas-loom-workbench-modes' });
         const meta = toolbar.createDiv({ cls: 'canvas-loom-workbench-meta' });
 
-        this.createPositionModeButton(modeGroup);
+        this.createModeButton(modeGroup, 'position', '位置');
         this.createModeButton(modeGroup, 'badge', '标记');
+        this.createModeButton(modeGroup, 'manual', '手动');
 
         const currentCards = this.workbenchService.getOrderedCards(this.context.state, this.context.sortPriority);
-        meta.createEl('div', { text: `${this.context.state.canvasFileBasename} · 快照 ${this.context.state.selectionSnapshot.length} 张` });
+        meta.createEl('div', { text: `${this.context.state.canvasFileBasename} · ${this.context.state.scopeLabel} · 快照 ${this.context.state.selectionSnapshot.length} 张` });
         meta.createEl('div', { text: `当前模式 ${this.getModeLabel(this.context.state.sortMode)} · 可输出 ${currentCards.length} 张` });
     }
 
@@ -90,23 +93,23 @@ export class MergeWorkbenchView extends ItemView {
         }
 
         const section = container.createDiv({ cls: 'canvas-loom-workbench-list-section' });
-        section.createEl('h4', { text: this.context.state.sortMode === 'badge' ? '按标记排序' : '按位置排序' });
+        section.createEl('h4', { text: this.getListTitle(this.context.state.sortMode) });
 
         const cards = this.workbenchService.getOrderedCards(this.context.state, this.context.sortPriority);
         const list = section.createDiv({ cls: 'canvas-loom-workbench-list' });
 
         if (cards.length === 0) {
-        const empty = list.createDiv({ cls: 'canvas-loom-workbench-list-empty' });
-            empty.setText(this.context.state.sortMode === 'badge' ? '当前没有可按标记排序的卡片。' : '当前没有可处理的文本卡片。');
+            const empty = list.createDiv({ cls: 'canvas-loom-workbench-list-empty' });
+            empty.setText('当前没有可处理的文本卡片。');
             return;
         }
 
         cards.forEach((card, index) => {
             const row = list.createDiv({ cls: 'canvas-loom-workbench-row' });
             row.dataset.index = index.toString();
-            row.setAttribute('draggable', String(this.isPositionModeActive()));
+            row.setAttribute('draggable', String(this.isManualModeActive()));
 
-            if (this.isPositionModeActive()) {
+            if (this.isManualModeActive()) {
                 row.addEventListener('dragstart', (event) => this.onDragStart(event, index));
                 row.addEventListener('dragover', (event) => this.onDragOver(event));
                 row.addEventListener('dragleave', () => row.classList.remove('is-drop-target'));
@@ -122,12 +125,12 @@ export class MergeWorkbenchView extends ItemView {
             textEl.title = card.text;
 
             if (card.badge) {
-            const badgeEl = row.createDiv({ cls: 'canvas-loom-workbench-badge' });
+                const badgeEl = row.createDiv({ cls: 'canvas-loom-workbench-badge' });
                 badgeEl.setText(card.badge);
             }
 
-            if (this.isPositionModeActive()) {
-            const handle = row.createDiv({ cls: 'canvas-loom-workbench-handle' });
+            if (this.isManualModeActive()) {
+                const handle = row.createDiv({ cls: 'canvas-loom-workbench-handle' });
                 handle.setText('⠿');
             }
         });
@@ -202,10 +205,10 @@ export class MergeWorkbenchView extends ItemView {
         }
 
         if (this.previewTimer) {
-            window.clearTimeout(this.previewTimer);
+            activeWindow.clearTimeout(this.previewTimer);
         }
 
-        this.previewTimer = window.setTimeout(() => {
+        this.previewTimer = activeWindow.setTimeout(() => {
             if (!this.context) {
                 return;
             }
@@ -214,30 +217,6 @@ export class MergeWorkbenchView extends ItemView {
             this.context.state = this.workbenchService.setLastComputedContent(this.context.state, content);
             previewEl.setText(content || '没有可预览的内容');
         }, 200);
-    }
-
-    private createPositionModeButton(container: HTMLElement): void {
-        if (!this.context) {
-            return;
-        }
-
-        const button = container.createEl('button', {
-            text: '位置',
-            cls: this.isPositionModeActive() ? 'mod-cta' : ''
-        });
-
-        button.addEventListener('click', () => {
-            if (!this.context) {
-                return;
-            }
-
-            this.context.state = this.workbenchService.setSortMode(
-                this.context.state,
-                'position',
-                this.context.sortPriority
-            );
-            this.render();
-        });
     }
 
     private createModeButton(container: HTMLElement, mode: MergeOrder, label: string): void {
@@ -264,8 +243,8 @@ export class MergeWorkbenchView extends ItemView {
         });
     }
 
-    private isPositionModeActive(): boolean {
-        return !!this.context && this.context.state.sortMode !== 'badge';
+    private isManualModeActive(): boolean {
+        return !!this.context && this.context.state.sortMode === 'manual';
     }
 
     private createActionButton(container: HTMLElement, label: string, handler: () => Promise<void>, disabled: boolean): void {
@@ -275,13 +254,13 @@ export class MergeWorkbenchView extends ItemView {
         });
 
         button.disabled = disabled;
-        button.addEventListener('click', async () => {
+        button.addEventListener('click', () => {
             if (button.disabled) {
                 new Notice('当前没有可输出的卡片');
                 return;
             }
 
-            await handler();
+            void handler();
         });
     }
 
@@ -333,156 +312,26 @@ export class MergeWorkbenchView extends ItemView {
             return '标记';
         }
 
+        if (mode === 'manual') {
+            return '手动';
+        }
+
         return '位置';
+    }
+
+    private getListTitle(mode: MergeOrder): string {
+        if (mode === 'badge') {
+            return '按标记排序';
+        }
+
+        if (mode === 'manual') {
+            return '手动排序';
+        }
+
+        return '按位置排序';
     }
 
     private toPreviewText(text: string): string {
         return text.length > 60 ? `${text.slice(0, 60)}...` : text;
-    }
-
-    private ensureStyles(): void {
-        if (document.getElementById('canvas-loom-workbench-style')) {
-            return;
-        }
-
-        const style = document.createElement('style');
-        style.id = 'canvas-loom-workbench-style';
-        style.textContent = `
-        .canvas-loom-workbench-container {
-                display: flex;
-                flex-direction: column;
-                gap: 16px;
-                padding: 12px;
-            }
-
-        .canvas-loom-workbench-empty {
-                padding: 20px;
-                color: var(--text-muted);
-            }
-
-        .canvas-loom-workbench-toolbar {
-                display: flex;
-                justify-content: space-between;
-                gap: 12px;
-                align-items: flex-start;
-                flex-wrap: wrap;
-            }
-
-        .canvas-loom-workbench-modes,
-        .canvas-loom-workbench-actions {
-                display: flex;
-                gap: 8px;
-                flex-wrap: wrap;
-            }
-
-        .canvas-loom-workbench-meta {
-                color: var(--text-muted);
-                font-size: 12px;
-                display: flex;
-                flex-direction: column;
-                gap: 4px;
-            }
-
-        .canvas-loom-workbench-list {
-                border: 1px solid var(--background-modifier-border);
-                border-radius: 8px;
-                overflow: hidden;
-                background: var(--background-secondary);
-            }
-
-        .canvas-loom-workbench-row {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 10px 12px;
-                border-bottom: 1px solid var(--background-modifier-border);
-                user-select: none;
-            }
-
-        .canvas-loom-workbench-row:last-child {
-                border-bottom: none;
-            }
-
-        .canvas-loom-workbench-row[draggable="true"] {
-                cursor: grab;
-            }
-
-        .canvas-loom-workbench-row.is-dragging {
-                opacity: 0.45;
-            }
-
-        .canvas-loom-workbench-row.is-drop-target {
-                background: var(--background-modifier-hover);
-            }
-
-        .canvas-loom-workbench-index {
-                min-width: 24px;
-                color: var(--text-faint);
-                font-variant-numeric: tabular-nums;
-            }
-
-        .canvas-loom-workbench-text {
-                flex: 1;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-
-        .canvas-loom-workbench-badge {
-                padding: 2px 8px;
-                border-radius: 999px;
-                background: var(--background-modifier-hover);
-                color: var(--text-accent);
-                font-size: 12px;
-            }
-
-        .canvas-loom-workbench-handle {
-                color: var(--text-faint);
-                font-size: 16px;
-            }
-
-        .canvas-loom-workbench-list-empty {
-                padding: 16px 12px;
-                color: var(--text-muted);
-            }
-
-        .canvas-loom-workbench-preview-section {
-                border-top: 1px solid var(--background-modifier-border);
-                padding-top: 12px;
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-            }
-
-        .canvas-loom-workbench-preview-header {
-                display: flex;
-                justify-content: space-between;
-                gap: 12px;
-                align-items: center;
-                flex-wrap: wrap;
-            }
-
-        .canvas-loom-workbench-preview-hint {
-                color: var(--text-muted);
-                font-size: 12px;
-            }
-
-        .canvas-loom-workbench-preview-content {
-                margin: 0;
-                padding: 12px;
-                background: var(--background-secondary);
-                border: 1px solid var(--background-modifier-border);
-                border-radius: 8px;
-                white-space: pre-wrap;
-                max-height: 260px;
-                overflow: auto;
-            }
-
-        .canvas-loom-workbench-preview-content.is-collapsed {
-                color: var(--text-muted);
-            }
-        `;
-
-        document.head.appendChild(style);
     }
 }

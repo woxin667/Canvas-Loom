@@ -1,9 +1,9 @@
-import { Modal, Notice } from "obsidian";
+import { App, Modal, Notice } from "obsidian";
 import { CardService } from "../../services/CardService";
 import { ClipboardAdapter } from "../../adapters/ClipboardAdapter";
 import { PositionSortStrategy } from "../../domain/strategies/PositionSort";
 import { validateDimension } from "../../utils/dimensionUtils";
-import { ModalStyleManager } from "../styles/ModalStyles";
+import type { CanvasNode, DimensionStats } from "../../types/canvas";
 
 interface CardInfo {
   id: string;
@@ -17,14 +17,14 @@ interface CardInfo {
 }
 
 export class CardPropertiesModal extends Modal {
-  private cards: any[];
+  private cards: CanvasNode[];
   private cardService: CardService;
   private cardInfos: CardInfo[] = [];
   private widthInput: HTMLInputElement;
   private heightInput: HTMLInputElement;
   private aspectToggle: HTMLInputElement;
 
-  constructor(app: any, cards: any[], cardService: CardService) {
+  constructor(app: App, cards: CanvasNode[], cardService: CardService) {
     super(app);
     this.cards = cards;
     this.cardService = cardService;
@@ -51,12 +51,13 @@ export class CardPropertiesModal extends Modal {
 
     // 按位置排序（从上到下，从左到右）
     const sorter = new PositionSortStrategy('yx', 10);
-    this.cardInfos = sorter.sort(this.cardInfos as unknown as any[]) as unknown as CardInfo[];
+    this.cardInfos = sorter.sort(this.cardInfos);
   }
 
   onOpen(): void {
     const { contentEl } = this;
     contentEl.empty();
+    contentEl.addClass("canvas-loom-card-properties-modal");
     
     // 标题
     contentEl.createEl("h2", { text: "管理卡片属性" });
@@ -75,8 +76,6 @@ export class CardPropertiesModal extends Modal {
     // 复制功能区域
     this.createCopySection(contentEl);
     
-    // 添加自定义样式
-    this.addStyles();
   }
 
   private createStatisticsSection(container: HTMLElement): void {
@@ -88,27 +87,23 @@ export class CardPropertiesModal extends Modal {
     
     // 选中卡片数量
     const countItem = statsGrid.createDiv({ cls: "cca-stat-item" });
-    countItem.innerHTML = `
-      <div class="cca-stat-label">选中卡片</div>
-      <div class="cca-stat-value highlight">${stats.count}</div>
-      <div class="cca-stat-detail">张卡片</div>
-    `;
+    countItem.createDiv({ cls: "cca-stat-label", text: "选中卡片" });
+    countItem.createDiv({ cls: "cca-stat-value highlight", text: String(stats.count) });
+    countItem.createDiv({ cls: "cca-stat-detail", text: "张卡片" });
     
     // 尺寸范围
     const sizeItem = statsGrid.createDiv({ cls: "cca-stat-item" });
-    sizeItem.innerHTML = `
-      <div class="cca-stat-label">尺寸范围</div>
-      <div class="cca-stat-value">${stats.avgWidth}×${stats.avgHeight}</div>
-      <div class="cca-stat-detail">宽 ${stats.minWidth}-${stats.maxWidth}px<br>高 ${stats.minHeight}-${stats.maxHeight}px</div>
-    `;
+    sizeItem.createDiv({ cls: "cca-stat-label", text: "尺寸范围" });
+    sizeItem.createDiv({ cls: "cca-stat-value", text: `${stats.avgWidth}×${stats.avgHeight}` });
+    const sizeDetail = sizeItem.createDiv({ cls: "cca-stat-detail" });
+    sizeDetail.createDiv({ text: `宽 ${stats.minWidth}-${stats.maxWidth}px` });
+    sizeDetail.createDiv({ text: `高 ${stats.minHeight}-${stats.maxHeight}px` });
     
     // 位置范围
     const positionItem = statsGrid.createDiv({ cls: "cca-stat-item" });
-    positionItem.innerHTML = `
-      <div class="cca-stat-label">位置范围</div>
-      <div class="cca-stat-value">X: ${stats.minX}-${stats.maxX}</div>
-      <div class="cca-stat-detail">Y: ${stats.minY}-${stats.maxY}</div>
-    `;
+    positionItem.createDiv({ cls: "cca-stat-label", text: "位置范围" });
+    positionItem.createDiv({ cls: "cca-stat-value", text: `X: ${stats.minX}-${stats.maxX}` });
+    positionItem.createDiv({ cls: "cca-stat-detail", text: `Y: ${stats.minY}-${stats.maxY}` });
   }
 
   private createCardList(container: HTMLElement): void {
@@ -183,9 +178,9 @@ export class CardPropertiesModal extends Modal {
       text: "统一为最小尺寸", 
       cls: "btn-option active" 
     });
-    minSizeBtn.addEventListener("click", async () => {
+    minSizeBtn.addEventListener("click", () => {
       this.updateButtonStates(minSizeBtn, buttonGroup);
-      await this.unifyToSize("min");
+      void this.unifyToSize("min");
     });
     
     // 统一为最大尺寸按钮
@@ -193,9 +188,9 @@ export class CardPropertiesModal extends Modal {
       text: "统一为最大尺寸", 
       cls: "btn-option" 
     });
-    maxSizeBtn.addEventListener("click", async () => {
+    maxSizeBtn.addEventListener("click", () => {
       this.updateButtonStates(maxSizeBtn, buttonGroup);
-      await this.unifyToSize("max");
+      void this.unifyToSize("max");
     });
     
     // 统一为平均尺寸按钮
@@ -203,10 +198,10 @@ export class CardPropertiesModal extends Modal {
       text: "统一为平均尺寸", 
       cls: "btn-option" 
     });
-    avgSizeBtn.addEventListener("click", async () => {
+    avgSizeBtn.addEventListener("click", () => {
       this.updateButtonStates(avgSizeBtn, buttonGroup);
       const stats = this.calculateStatistics();
-      await this.unifyToCustomSize(stats.avgWidth, stats.avgHeight);
+      void this.unifyToCustomSize(stats.avgWidth, stats.avgHeight);
     });
     
     // 自定义尺寸操作组 - 右栏
@@ -223,7 +218,7 @@ export class CardPropertiesModal extends Modal {
       type: "number",
       value: "",
       attr: { min: "50", max: "2000", placeholder: "留空不变" }
-    }) as HTMLInputElement;
+    });
     
     // 高度输入组
     const heightGroup = sizeInputs.createDiv({ cls: "input-compact" });
@@ -232,13 +227,13 @@ export class CardPropertiesModal extends Modal {
       type: "number", 
       value: "",
       attr: { min: "50", max: "2000", placeholder: "留空不变" }
-    }) as HTMLInputElement;
+    });
 
     // 锁定宽高比控制
     const aspectToggleDiv = customSizeGroup.createDiv({ cls: "aspect-ratio-toggle" });
     this.aspectToggle = aspectToggleDiv.createEl("input", {
       type: "checkbox"
-    }) as HTMLInputElement;
+    });
     aspectToggleDiv.createSpan({ text: "锁定宽高比（等比例调整）" });
 
     // 初始化宽高比（使用当前选中卡片的平均宽高比）
@@ -250,9 +245,9 @@ export class CardPropertiesModal extends Modal {
 
     // 回车键支持
     [this.widthInput, this.heightInput].forEach((input) => {
-      input.addEventListener("keypress", async (e) => {
+      input.addEventListener("keypress", (e) => {
         if (e.key === "Enter") {
-          await this.applyCustomSize();
+          void this.applyCustomSize();
         }
       });
     });
@@ -347,14 +342,14 @@ export class CardPropertiesModal extends Modal {
       cls: "cca-btn cca-btn-secondary"
     });
     
-    copyAllSizesBtn.addEventListener("click", async () => {
+    copyAllSizesBtn.addEventListener("click", () => {
       const sizeList = this.cardInfos.map((card, index) => 
         `${index + 1}. ${card.width} × ${card.height} px`
       ).join('\n');
       
       const sizeInfo = `批量卡片尺寸 (${this.cardInfos.length}张):\n${sizeList}`;
       const clipboardAdapter = new ClipboardAdapter();
-      await clipboardAdapter.writeTextWithNotice(sizeInfo, "所有卡片尺寸已复制到剪贴板");
+      void clipboardAdapter.writeTextWithNotice(sizeInfo, "所有卡片尺寸已复制到剪贴板");
     });
 
     // 复制统计信息
@@ -363,7 +358,7 @@ export class CardPropertiesModal extends Modal {
       cls: "cca-btn cca-btn-info"
     });
     
-    copyStatsBtn.addEventListener("click", async () => {
+    copyStatsBtn.addEventListener("click", () => {
       const stats = this.calculateStatistics();
       const statsInfo = `卡片统计信息:
 数量: ${stats.count}张   
@@ -372,7 +367,7 @@ export class CardPropertiesModal extends Modal {
 位置范围: X: ${stats.minX}-${stats.maxX}, Y: ${stats.minY}-${stats.maxY}`;
 
       const clipboardAdapter = new ClipboardAdapter();
-      await clipboardAdapter.writeTextWithNotice(statsInfo, "统计信息已复制到剪贴板");
+      void clipboardAdapter.writeTextWithNotice(statsInfo, "统计信息已复制到剪贴板");
     });
 
     // 应用更改按钮
@@ -381,12 +376,12 @@ export class CardPropertiesModal extends Modal {
       cls: "cca-btn cca-btn-primary"
     });
     
-    applyBtn.addEventListener("click", async () => {
-      await this.applyCustomSize();
+    applyBtn.addEventListener("click", () => {
+      void this.applyCustomSize();
     });
   }
 
-  private calculateStatistics(): any {
+  private calculateStatistics(): DimensionStats {
     const widths = this.cardInfos.map(c => c.width);
     const heights = this.cardInfos.map(c => c.height);
     const xPositions = this.cardInfos.map(c => c.x);
@@ -413,7 +408,8 @@ export class CardPropertiesModal extends Modal {
       this.close();
     } catch (error) {
       console.error("统一尺寸失败:", error);
-      new Notice("统一尺寸失败: " + error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice("统一尺寸失败: " + message);
     }
   }
 
@@ -424,7 +420,8 @@ export class CardPropertiesModal extends Modal {
       this.close();
     } catch (error) {
       console.error("统一尺寸失败:", error);
-      new Notice("统一尺寸失败: " + error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice("统一尺寸失败: " + message);
     }
   }
 
@@ -505,7 +502,8 @@ export class CardPropertiesModal extends Modal {
       await this.cardService.unifyCardWidth(this.cards, width);
     } catch (error) {
       console.error("统一宽度失败:", error);
-      new Notice("统一宽度失败: " + error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice("统一宽度失败: " + message);
     }
   }
 
@@ -515,246 +513,13 @@ export class CardPropertiesModal extends Modal {
       await this.cardService.unifyCardHeight(this.cards, height);
     } catch (error) {
       console.error("统一高度失败:", error);
-      new Notice("统一高度失败: " + error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice("统一高度失败: " + message);
     }
   }
 
   private validateDimension(value: number): boolean {
     return validateDimension(value);
-  }
-
-  private addStyles(): void {
-    ModalStyleManager.injectSharedStyles();
-    const style = document.createElement("style");
-    style.id = "card-properties-modal-styles";
-    
-    if (document.getElementById("card-properties-modal-styles")) {
-      document.getElementById("card-properties-modal-styles")?.remove();
-    }
-    
-    style.textContent = `
-      /* 表格特定样式 */
-      .table-container {
-        background: var(--background-secondary-alt);
-        border-radius: 6px;
-        overflow: hidden;
-        border: 1px solid var(--background-modifier-border);
-        margin-bottom: 24px;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-      }
-
-      thead {
-        background: var(--background-secondary);
-      }
-
-      th {
-        text-align: left;
-        padding: 10px 8px;
-        font-weight: 500;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        border-bottom: 1px solid var(--background-modifier-border);
-      }
-
-      td {
-        padding: 10px 8px;
-        color: var(--text-muted);
-        border-bottom: 1px solid rgba(var(--mono-rgb-100), 0.05);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      /* 列宽优化 */
-      .col-index { width: 8%; }
-      .col-preview { width: 40%; }
-      .col-size { width: 18%; }
-      .col-position { width: 20%; }
-      .col-badge { width: 14%; }
-
-      tbody tr {
-        transition: background 0.2s;
-      }
-
-      tbody tr:hover {
-        background: var(--background-modifier-hover);
-      }
-
-      .preview-text {
-        color: var(--text-faint);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 100%;
-      }
-
-      .layer-badge {
-        display: inline-block;
-        background: var(--background-modifier-accent);
-        color: #ff9756;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-weight: 500;
-      }
-
-      /* 操作区域特定布局 */
-      .operations-container {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-        margin-bottom: 24px;
-      }
-
-      .button-group {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .btn-option {
-        padding: 10px 12px;
-        background: var(--background-primary);
-        border: 1px solid var(--background-modifier-border);
-        color: var(--text-muted);
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-align: center;
-      }
-
-      .btn-option:hover {
-        background: var(--background-modifier-hover);
-        border-color: var(--background-modifier-border-hover);
-        color: var(--text-normal);
-      }
-
-      .btn-option.active {
-        background: var(--interactive-accent);
-        border-color: var(--interactive-accent);
-        color: var(--text-on-accent);
-      }
-
-      /* 紧凑的自定义尺寸输入 */
-      .size-inputs-compact {
-        display: flex;
-        gap: 15px;
-        align-items: center;
-        margin-bottom: 12px;
-      }
-
-      .input-compact {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .input-label-compact {
-        color: var(--text-muted);
-        min-width: 24px;
-      }
-
-      .input-compact input {
-        width: 80px;
-        background: var(--background-primary);
-        border: 1px solid var(--background-modifier-border);
-        color: var(--text-normal);
-        padding: 8px 10px;
-        border-radius: 4px;
-        outline: none;
-        transition: border-color 0.2s;
-      }
-
-      .input-compact input:focus {
-        border-color: var(--interactive-accent);
-      }
-
-      .input-compact input::placeholder {
-        color: var(--text-faint);
-        font-size: 11px;
-      }
-
-      /* 宽高比锁定控制 */
-      .aspect-ratio-toggle {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--text-muted);
-        margin-bottom: 8px;
-        font-size: 12px;
-      }
-
-      .aspect-ratio-toggle input {
-        cursor: pointer;
-      }
-
-      }
-
-      .btn {
-        flex: 1;
-        padding: 12px 16px;
-        border: none;
-        border-radius: 6px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-
-      .btn-primary {
-        background: #7c6adb;
-        color: var(--text-on-accent);
-      }
-
-      .btn-primary:hover {
-        background: #6b59d3;
-      }
-
-      .btn-secondary {
-        background: var(--background-secondary);
-        color: var(--text-muted);
-      }
-
-      .btn-secondary:hover {
-        background: var(--background-modifier-hover);
-        color: var(--text-normal);
-      }
-
-      .btn-info {
-        background: #4a5568;
-        color: var(--text-on-accent);
-      }
-
-      .btn-info:hover {
-        background: #3a4452;
-      }
-
-      /* 响应式调整 */
-      @media (max-width: 640px) {
-        .stats-grid {
-          grid-template-columns: 1fr;
-        }
-        
-        .operations-container {
-          grid-template-columns: 1fr;
-        }
-        
-        .button-group {
-          flex-direction: column;
-        }
-      }
-    `;
-    
-    document.head.appendChild(style);
-    
-    // 清理样式
-    this.scope.register([], "cleanup-style", () => {
-      style.remove();
-    });
   }
 
   onClose(): void {

@@ -1,8 +1,9 @@
+import { Menu, MenuItem } from "obsidian";
 import { ICommand } from "./ICommand";
 
 export class CommandRegistry {
     private commands: Map<string, ICommand> = new Map();
-    private menuItems: Map<string, any> = new Map();
+    private menuItems: Map<string, { menu: Menu; item: MenuItem }> = new Map();
 
     registerCommand(id: string, command: ICommand): void {
         this.commands.set(id, command);
@@ -29,28 +30,26 @@ export class CommandRegistry {
         return this.commands.has(id);
     }
 
-    registerMenuItem(id: string, menu: any, item: any): void {
+    registerMenuItem(id: string, menu: Menu, item: MenuItem): void {
         this.menuItems.set(id, { menu, item });
     }
 
-    addCommandToMenu(menu: any, commandId: string, title: string, icon?: string): void {
+    addCommandToMenu(menu: Menu, commandId: string, title: string, icon?: string): void {
         const command = this.commands.get(commandId);
         if (!command) {
             console.warn(`Command not found when adding to menu: ${commandId}`);
             return;
         }
 
-        menu.addItem((item: any) => {
+        menu.addItem((item: MenuItem) => {
             item.setTitle(title);
             if (icon) {
                 item.setIcon(icon);
             }
-            item.onClick(async () => {
-                try {
-                    await this.executeCommand(commandId);
-                } catch (error) {
+            item.onClick(() => {
+                void this.executeCommand(commandId).catch((error) => {
                     console.error(`Error executing command ${commandId}:`, error);
-                }
+                });
             });
         });
     }

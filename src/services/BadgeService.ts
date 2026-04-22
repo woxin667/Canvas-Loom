@@ -1,16 +1,17 @@
 import { Notice } from "obsidian";
 import { ICanvasAdapter } from "../adapters/CanvasAdapter";
 import { BadgeData } from "../domain/models/Badge";
+import type { CanvasNode } from "../types/canvas";
 
 export interface IBadgeService {
-    getCurrentBadge(node: any): Promise<BadgeData | null>;
-    setBadge(node: any, badgeText: string): Promise<void>;
-    removeBadge(node: any): Promise<void>;
-    applyBadgeToNode(node: any, badge: BadgeData): void;
-    clearBadgeFromNode(node: any): void;
+    getCurrentBadge(node: CanvasNode): Promise<BadgeData | null>;
+    setBadge(node: CanvasNode, badgeText: string): Promise<void>;
+    removeBadge(node: CanvasNode): Promise<void>;
+    applyBadgeToNode(node: CanvasNode, badge: BadgeData): void;
+    clearBadgeFromNode(node: CanvasNode): void;
     clearCanvasBadgeDom(): void;
     loadCanvasBadges(): Promise<void>;
-    isValidBadgeNode(node: any): boolean;
+    isValidBadgeNode(node: CanvasNode): boolean;
 }
 
 export class BadgeService implements IBadgeService {
@@ -19,27 +20,28 @@ export class BadgeService implements IBadgeService {
         private isBadgeDisplayEnabled: () => boolean = () => true
     ) {}
 
-    async getCurrentBadge(node: any): Promise<BadgeData | null> {
+    getCurrentBadge(node: CanvasNode): Promise<BadgeData | null> {
         try {
             const canvasData = this.canvasAdapter.getData();
             const nodeData = canvasData.nodes.find(n => n.id === node.id);
             if (nodeData?.badge) {
-                return BadgeData.create(nodeData.badge);
+                return Promise.resolve(BadgeData.create(nodeData.badge));
             }
         } catch (error) {
+            console.debug("读取画布标记失败，改为尝试读取 DOM 标记。", error);
         }
 
         for (const element of this.getNodeElements(node)) {
             const badge = element.getAttribute("data-badge");
             if (badge) {
-                return BadgeData.create(badge);
+                return Promise.resolve(BadgeData.create(badge));
             }
         }
 
-        return null;
+        return Promise.resolve(null);
     }
 
-    async setBadge(node: any, badgeText: string): Promise<void> {
+    async setBadge(node: CanvasNode, badgeText: string): Promise<void> {
         try {
             const badge = BadgeData.create(badgeText);
             if (!badge.isValid()) {
@@ -61,7 +63,7 @@ export class BadgeService implements IBadgeService {
         }
     }
 
-    async removeBadge(node: any): Promise<void> {
+    async removeBadge(node: CanvasNode): Promise<void> {
         try {
             this.clearBadgeFromNode(node);
             await this.persistBadgeToCanvas(node, null);
@@ -73,7 +75,7 @@ export class BadgeService implements IBadgeService {
         }
     }
 
-    applyBadgeToNode(node: any, badge: BadgeData): void {
+    applyBadgeToNode(node: CanvasNode, badge: BadgeData): void {
         if (!this.isBadgeDisplayEnabled()) {
             this.clearBadgeFromNode(node);
             return;
@@ -84,7 +86,7 @@ export class BadgeService implements IBadgeService {
         });
     }
 
-    clearBadgeFromNode(node: any): void {
+    clearBadgeFromNode(node: CanvasNode): void {
         this.getNodeElements(node).forEach(element => {
             element.removeAttribute("data-badge");
             element.removeAttribute("data-badge-type");
@@ -105,9 +107,9 @@ export class BadgeService implements IBadgeService {
         }
     }
 
-    async loadCanvasBadges(): Promise<void> {
+    loadCanvasBadges(): Promise<void> {
         if (!this.isBadgeDisplayEnabled()) {
-            return;
+            return Promise.resolve();
         }
 
         try {
@@ -126,23 +128,25 @@ export class BadgeService implements IBadgeService {
         } catch (error) {
             console.error("加载画布标记时出错:", error);
         }
+
+        return Promise.resolve();
     }
 
-    isValidBadgeNode(node: any): boolean {
+    isValidBadgeNode(node: CanvasNode): boolean {
         const isTextCard = node.text !== undefined;
         const isMarkdownEmbed = node.nodeEl?.querySelector('.markdown-embed') !== null;
         return isTextCard || isMarkdownEmbed;
     }
 
-    private getNodeElements(node: any): Element[] {
+    private getNodeElements(node: CanvasNode): Element[] {
         return [
             node.nodeEl?.querySelector('.canvas-node-content'),
             node.nodeEl?.querySelector('.markdown-embed'),
             node.nodeEl
-        ].filter(Boolean);
+        ].filter((element): element is Element => element instanceof Element);
     }
 
-    private async persistBadgeToCanvas(node: any, badge: BadgeData | null): Promise<void> {
+    private async persistBadgeToCanvas(node: CanvasNode, badge: BadgeData | null): Promise<void> {
         const canvasData = this.canvasAdapter.getData();
         const nodeData = canvasData.nodes.find(n => n.id === node.id);
 
@@ -156,7 +160,7 @@ export class BadgeService implements IBadgeService {
             delete nodeData.badge;
         }
 
-        delete (nodeData as any).badgeType;
+        delete nodeData.badgeType;
 
         await this.canvasAdapter.setData(canvasData);
         await this.canvasAdapter.requestSave();

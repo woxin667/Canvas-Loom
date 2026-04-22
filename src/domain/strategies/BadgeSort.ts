@@ -4,9 +4,9 @@ import { SortStrategy, BadgedCard } from "./SortStrategy";
 export class BadgeSortStrategy implements SortStrategy<BadgedCard> {
     constructor(private readonly sortPriority: SortPriority = 'yx') {}
 
-    sort(cards: BadgedCard[]): BadgedCard[] {
+    sort<T extends BadgedCard>(cards: T[]): T[] {
         const positionSorter = new PositionSortStrategy(this.sortPriority);
-        const positionedCards = positionSorter.sort(cards as any) as BadgedCard[];
+        const positionedCards = positionSorter.sort(cards);
 
         return [...positionedCards].sort((a, b) => {
             const aBadge = (a.badge || "").trim();

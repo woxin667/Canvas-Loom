@@ -3,11 +3,12 @@ import { ICommand } from "./ICommand";
 import { IContentService } from "../../services/ContentService";
 import { IMergeService } from "../../services/MergeService";
 import CanvasLoomSettings from "../../settings/ICanvasLoomSettings";
+import type { CanvasNode } from "../../types/canvas";
 
 export class QuickCopyCommand implements ICommand {
     constructor(
         private contentService: IContentService,
-        private selection: any[],
+        private selection: CanvasNode[],
         private settings: CanvasLoomSettings
     ) {}
 
@@ -33,7 +34,7 @@ export class QuickCopyCommand implements ICommand {
 export class QuickMergeCommand implements ICommand {
     constructor(
         private mergeService: IMergeService,
-        private selection: any[],
+        private selection: CanvasNode[],
         private settings: CanvasLoomSettings
     ) {}
 
@@ -56,7 +57,7 @@ export class QuickMergeCommand implements ICommand {
 export class OpenPreviewWorkbenchCommand implements ICommand {
     constructor(
         private mergeService: IMergeService,
-        private selection: any[],
+        private selection: CanvasNode[],
         private canvasFile: TFile | null,
         private settings: CanvasLoomSettings
     ) {}

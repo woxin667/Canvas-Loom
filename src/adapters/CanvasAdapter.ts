@@ -1,11 +1,12 @@
 import { CanvasData, CanvasDataModel, CanvasNodeData } from "../domain/models/CanvasData";
-import { CardData } from "../domain/models/Card";
+import type { Canvas, CanvasNode } from "../types/canvas";
 
 export interface ICanvasAdapter {
     getData(): CanvasData;
     setData(data: CanvasData): Promise<void>;
-    getSelectedNodes(): any[];
-    findNodeById(id: string): any | null;
+    getSelectedNodes(): CanvasNode[];
+    replaceSelection(nodes: CanvasNode[]): void;
+    findNodeById(id: string): CanvasNode | null;
     requestSave(): Promise<void>;
     updateNode(nodeData: CanvasNodeData): Promise<void>;
     addNode(nodeData: CanvasNodeData): Promise<void>;
@@ -13,7 +14,7 @@ export interface ICanvasAdapter {
 }
 
 export class CanvasAdapter implements ICanvasAdapter {
-    constructor(private canvas: any) {
+    constructor(private canvas: Canvas) {
         if (!canvas) {
             throw new Error("Canvas instance is required");
         }
@@ -38,7 +39,7 @@ export class CanvasAdapter implements ICanvasAdapter {
         }
     }
 
-    getSelectedNodes(): any[] {
+    getSelectedNodes(): CanvasNode[] {
         try {
             if (this.canvas.selection && this.canvas.selection.size > 0) {
                 return Array.from(this.canvas.selection);
@@ -50,7 +51,26 @@ export class CanvasAdapter implements ICanvasAdapter {
         }
     }
 
-    findNodeById(id: string): any | null {
+    replaceSelection(nodes: CanvasNode[]): void {
+        try {
+            const nextSelection = new Set(nodes);
+            const applySelection = () => {
+                this.canvas.selection = nextSelection;
+            };
+
+            if (typeof this.canvas.updateSelection === "function") {
+                this.canvas.updateSelection(applySelection);
+                return;
+            }
+
+            applySelection();
+        } catch (error) {
+            console.error("Failed to replace selection:", error);
+            throw new Error("无法更新画布选区");
+        }
+    }
+
+    findNodeById(id: string): CanvasNode | null {
         try {
             return this.canvas.nodes?.get(id) || null;
         } catch (error) {

@@ -1,18 +1,23 @@
-import { Notice } from "obsidian";
+import { App, Notice } from "obsidian";
 import { CardPropertiesModal } from "../modals/CardPropertiesModal";
 import { SingleCardPropertiesModal } from "../modals/SingleCardPropertiesModal";
 import { CardService } from "../../services/CardService";
 import { ClipboardAdapter } from "../../adapters/ClipboardAdapter";
+import type { CanvasNode } from "../../types/canvas";
 
 export class OpenCardPropertiesCommand {
   constructor(
-    private app: any,
+    private app: App,
     private cardService: CardService,
-    private selection: any[],
+    private selection: CanvasNode[],
     private clipboardAdapter: ClipboardAdapter
   ) {}
 
-  async execute(): Promise<void> {
+  execute(): Promise<void> {
+    return this.openModal();
+  }
+
+  private async openModal(): Promise<void> {
     try {
       // 过滤出文本卡片
       const textCards = this.selection.filter(node => {
@@ -57,7 +62,7 @@ export class OpenCardPropertiesCommand {
       try {
         const data = node.getData && node.getData();
         return data && data.type === "text";
-      } catch (error) {
+      } catch {
         return false;
       }
     });
@@ -73,10 +78,14 @@ export class OpenCardPropertiesCommand {
 // 另一个实用命令：快速复制卡片尺寸到剪贴板
 export class CopyCardDimensionsCommand {
   constructor(
-    private selection: any[]
+    private selection: CanvasNode[]
   ) {}
 
-  async execute(): Promise<void> {
+  execute(): Promise<void> {
+    return this.copyDimensions();
+  }
+
+  private async copyDimensions(): Promise<void> {
     try {
       const textCards = this.selection.filter(node => {
         const data = node.getData && node.getData();

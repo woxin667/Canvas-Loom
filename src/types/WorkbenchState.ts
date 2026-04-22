@@ -7,12 +7,14 @@ export interface CardSnapshot {
     y: number;
     width: number;
     height: number;
+    color?: string;
     badge?: string;
 }
 
 export interface WorkbenchState {
     canvasFilePath: string | null;
     canvasFileBasename: string;
+    scopeLabel: string;
     selectionSnapshot: CardSnapshot[];
     sortMode: MergeOrder;
     manualOrderIds: string[];

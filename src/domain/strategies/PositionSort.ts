@@ -8,7 +8,7 @@ export class PositionSortStrategy implements SortStrategy<SortableCard> {
         private readonly tolerance: number = 10
     ) {}
 
-    sort(cards: SortableCard[]): SortableCard[] {
+    sort<T extends SortableCard>(cards: T[]): T[] {
         return [...cards].sort((a, b) => {
             if (this.priority === 'yx') {
                 // 优先按y坐标排序（从上到下），然后按x坐标排序（从左到右）
